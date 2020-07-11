@@ -15,9 +15,9 @@ struct listIntervals {
 };
 typedef struct listIntervals listIntervals;
 
-void updateHoles(int newLow, int newHigh, listIntervals* list, int* num);
+void updateHoles(int newLow, int newHigh, listIntervals* list);
 void printRanges(int limit, int vector[100]);
-void updateVector(listIntervals* list, int num, int vector[100]);
+void updateVector(listIntervals* list, int vector[100]);
 
 void printList(listIntervals* list);
 
@@ -42,14 +42,16 @@ int main() {
 	list->next = NULL;
 	free(hole);
 
-	int* num = (int*) malloc(sizeof(int)); //number of elements in the list of intervals
-	*num = 1;
 
-	updateHoles(20, 21, list, num);
-	updateHoles(3, 5, list, num);
-	updateHoles(30, 35, list, num);
-	updateHoles(10, 15, list, num);
-	updateVector(list, *num, vector);
+	updateHoles(20, 21, list);
+	updateHoles(3, 5, list);
+	updateHoles(30, 35, list);
+	updateHoles(10, 15, list);
+
+	//updateHoles(3, 6, list);
+	//updateHoles(3, 5, list);
+
+	updateVector(list, vector);
 	printRanges(50, vector);
 	printList(list);
 
@@ -65,13 +67,11 @@ void printList(listIntervals *list) {
 	printf("\n");
 }
 
-void updateHoles(int newLow, int newHigh, listIntervals* list, int* num) {
+void updateHoles(int newLow, int newHigh, listIntervals* list) {
 	interval *hole = (interval*) malloc(sizeof(interval)); //creates new interval to insert in the list
 	hole->low = newLow;
 	hole->high = newHigh;
 	hole->cumulativeJumps = newHigh - newLow + 1;
-
-	(*num)++; //increments the number of elements in the array of intervals
 
 	listIntervals *newPiece = (listIntervals*) malloc(sizeof(listIntervals));
 	newPiece->obj = *hole;
@@ -82,10 +82,8 @@ void updateHoles(int newLow, int newHigh, listIntervals* list, int* num) {
 		if (list->next != NULL) {
 
 			if (newLow > list->obj.high && newHigh < list->next->obj.low) { //basic insertion and right shift of elements
-				newLow += (list->obj.high - list->obj.low);
-				newHigh += (list->obj.high - list->obj.low);
-				newPiece->obj.low = newLow;
-				newPiece->obj.high = newHigh;
+				newPiece->obj.low = newLow + (list->obj.high - list->obj.low);
+				newPiece->obj.high = newHigh + (list->obj.high - list->obj.low);
 				newPiece->obj.cumulativeJumps += list->obj.cumulativeJumps;
 				newPiece->next = list->next;
 				list->next = newPiece;
@@ -95,14 +93,18 @@ void updateHoles(int newLow, int newHigh, listIntervals* list, int* num) {
 			}
 		} else { //last piece to be inserted in the list
 			if (newLow > list->obj.high) {
-				newLow += (list->obj.high - list->obj.low);
-				newHigh += (list->obj.high - list->obj.low);
-				newPiece->obj.low = newLow;
-				newPiece->obj.high = newHigh;
+				newPiece->obj.low = newLow + (list->obj.high - list->obj.low);
+				newPiece->obj.high = newHigh + (list->obj.high - list->obj.low);
 				newPiece->obj.cumulativeJumps += list->obj.cumulativeJumps;
 				list->next = newPiece;
 				return;
-			}
+			} /*else if (newLow == list->obj.high + 1) {
+				//bugged piece
+				free(newPiece);
+				newHigh += (list->obj.high - list->obj.low);
+				list->obj.high = newHigh;
+				return;
+			}*/
 		}
 
 		newLow += (list->obj.high - list->obj.low + 1);
@@ -123,29 +125,27 @@ void shiftIntervals(listIntervals *stack, int value) {
 	}
 }
 
-void updateVector(listIntervals* list, int num, int vector[100]) {
+void updateVector(listIntervals* list, int vector[100]) {
 	//this function build up the vector using as reference the array of intervals
-	int pos = 0; //iteration through holes list
 	int jumps = -1; //number of places to jump, starts from -1 to take account of i=0 jumped by default
 	//i iterates through the vector and assigning the values
 
 	for (int i = 0; i < 100; i++) { //iteration through vector
-		if (pos == num) { //elements after the last interval
-			vector[i] = i - jumps;
-		} else { //when the array of intervals isn't finished yet
-			if (i >= list->obj.low && i <= list->obj.high) { //elements between an interval
-				vector[i] = -1;
-				jumps++;
-				if (i == list->obj.high) { //increments pos after last element in the present interval
-					pos++;
-					list = list->next;
-				}
-			} else if (i < list->obj.low) { //before the first element of the next interval
-				vector[i] = i - jumps;
-			} else {
-				vector[i] = i; //the elements before the first interval
-			}
-		}
+		 if (list != NULL) {
+			 if (i >= list->obj.low && i <= list->obj.high) { //elements between an interval
+				 vector[i] = -1;
+				 jumps++;
+				 if (i == list->obj.high) { //increments pos after last element in the present interval
+					 list = list->next;
+				 }
+			 } else if (i < list->obj.low) { //before the first element of the next interval
+				 vector[i] = i - jumps;
+			 } else {
+				 vector[i] = i; //the elements before the first interval
+			 }
+		 } else {
+			 vector[i] = i - jumps;
+		 }
 	}
 }
 

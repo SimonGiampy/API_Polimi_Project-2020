@@ -74,13 +74,14 @@ void input(FILE *fp) { //fp is the file pointer passed from main
 		unsigned int end = command->end;
 		unsigned int num = end - start + 1;
 		char action = command->command;
+		//this below works only for change command 'c', since it reads the text
 
 		char **text = (char**) malloc(sizeof(char*) * num); //allocates an array of num strings, one for each line
 		for (int i = 0; i < num; i++) {
 			text[i] = (char*) malloc(sizeof(char) * (1024 + 2));
 			fgets(text[i], 1024 + 2, fp);
 		}
-		fgets(buffer, 3, fp); //reads the terminal sequence ".\n\0" -> 3 chars
+		fgets(buffer, 3, fp); //reads the terminal sequence of the input text ".\n\0" -> 3 chars
 		if (buffer[0] != '.') {
 			exit(1); //exits in case there isn't a full stop, this should never be called
 		}
@@ -100,8 +101,8 @@ struct command* getCommand(char* input) { //translates the input string in a str
     int i = 0, comma = 1;
     long start, end;
     char action;
-    //char tmp1[9] = ""; //9 is the max number of digits since there are at most 2B lines
-    char *tmp = (char*) malloc(sizeof(char) * 9);
+
+    char *tmp = (char*) malloc(sizeof(char) * 9); //9 is the max number of digits since there are at most 2B lines
     while (input[i] != '\n') {
         if (input[i] == ',') {
             memcpy(tmp, input, i); //take substring 1 before comma char

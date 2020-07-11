@@ -8,6 +8,7 @@ struct interval {
 };
 typedef struct interval interval;
 
+//this struct can be optimized by converting it in an auto-balancing binary search tree
 struct listIntervals {
 	struct listIntervals *next;
 	interval obj;
@@ -16,7 +17,11 @@ typedef struct listIntervals listIntervals;
 
 void updateHoles(int newLow, int newHigh, listIntervals* list, int* num);
 void printRanges(int limit, int vector[100]);
-void updateVector(listIntervals** list, int num, int vector[100]);
+void updateVector(listIntervals* list, int num, int vector[100]);
+
+void printList(listIntervals* list);
+
+void shiftIntervals(struct listIntervals *stack, int value);
 
 int main() {
 	//this section is used for debugging and calculating the result after deleting several rows
@@ -40,38 +45,85 @@ int main() {
 	int* num = (int*) malloc(sizeof(int)); //number of elements in the list of intervals
 	*num = 1;
 
+	updateHoles(20, 21, list, num);
 	updateHoles(3, 5, list, num);
-	updateVector(&list, *num, vector);
-	printRanges(20, vector);
+	updateHoles(30, 35, list, num);
+	updateHoles(10, 15, list, num);
+	updateVector(list, *num, vector);
+	printRanges(50, vector);
+	printList(list);
 
 	return 0;
+}
+
+void printList(listIntervals *list) {
+	while (list != NULL) {
+		//format is <low, high, cumulativeJumps>
+		printf("<%d, %d, %d>    ", list->obj.low, list->obj.high, list->obj.cumulativeJumps);
+		list = list->next;
+	}
+	printf("\n");
 }
 
 void updateHoles(int newLow, int newHigh, listIntervals* list, int* num) {
 	interval *hole = (interval*) malloc(sizeof(interval)); //creates new interval to insert in the list
 	hole->low = newLow;
 	hole->high = newHigh;
+	hole->cumulativeJumps = newHigh - newLow + 1;
+
+	(*num)++; //increments the number of elements in the array of intervals
 
 	listIntervals *newPiece = (listIntervals*) malloc(sizeof(listIntervals));
 	newPiece->obj = *hole;
 	newPiece->next = NULL;
 	free(hole);
 
-	int i = 0;
-	while (i < *num) {
+	while (list != NULL) {
+		if (list->next != NULL) {
 
+			if (newLow > list->obj.high && newHigh < list->next->obj.low) { //basic insertion and right shift of elements
+				newLow += (list->obj.high - list->obj.low);
+				newHigh += (list->obj.high - list->obj.low);
+				newPiece->obj.low = newLow;
+				newPiece->obj.high = newHigh;
+				newPiece->obj.cumulativeJumps += list->obj.cumulativeJumps;
+				newPiece->next = list->next;
+				list->next = newPiece;
 
-		if (newLow > list->obj.high) { //new interval is after the last one
-			newPiece->obj.cumulativeJumps = list->obj.cumulativeJumps + (newHigh - newLow + 1);
-			list->next = newPiece;
+				shiftIntervals(newPiece->next, newPiece->obj.high - newPiece->obj.low + 1);
+				return;
+			}
+		} else { //last piece to be inserted in the list
+			if (newLow > list->obj.high) {
+				newLow += (list->obj.high - list->obj.low);
+				newHigh += (list->obj.high - list->obj.low);
+				newPiece->obj.low = newLow;
+				newPiece->obj.high = newHigh;
+				newPiece->obj.cumulativeJumps += list->obj.cumulativeJumps;
+				list->next = newPiece;
+				return;
+			}
 		}
 
-		i++;
+		newLow += (list->obj.high - list->obj.low + 1);
+		newHigh += (list->obj.high - list->obj.low + 1);
+		newPiece->obj.low = newLow;
+		newPiece->obj.high = newHigh;
+		list = list->next; //list advancement
 	}
-	(*num)++; //increments the number of elements in the array of intervals
+
 }
 
-void updateVector(listIntervals** list, int num, int vector[100]) {
+void shiftIntervals(listIntervals *stack, int value) {
+	while (stack != NULL) {
+		stack->obj.low += value;
+		stack->obj.high += value;
+		stack->obj.cumulativeJumps += value;
+		stack = stack->next;
+	}
+}
+
+void updateVector(listIntervals* list, int num, int vector[100]) {
 	//this function build up the vector using as reference the array of intervals
 	int pos = 0; //iteration through holes list
 	int jumps = -1; //number of places to jump, starts from -1 to take account of i=0 jumped by default
@@ -81,14 +133,14 @@ void updateVector(listIntervals** list, int num, int vector[100]) {
 		if (pos == num) { //elements after the last interval
 			vector[i] = i - jumps;
 		} else { //when the array of intervals isn't finished yet
-			if (i >= (*list)->obj.low && i <= (*list)->obj.high) { //elements between an interval
+			if (i >= list->obj.low && i <= list->obj.high) { //elements between an interval
 				vector[i] = -1;
 				jumps++;
-				if (i == (*list)->obj.high) { //increments pos after last element in the present interval
+				if (i == list->obj.high) { //increments pos after last element in the present interval
 					pos++;
-					(*list) = (*list)->next;
+					list = list->next;
 				}
-			} else if (i < (*list)->obj.low) { //before the first element of the next interval
+			} else if (i < list->obj.low) { //before the first element of the next interval
 				vector[i] = i - jumps;
 			} else {
 				vector[i] = i; //the elements before the first interval

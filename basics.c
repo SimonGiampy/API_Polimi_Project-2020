@@ -57,8 +57,9 @@ int hash(int n) { //hash function with linear hashing
 void change(int start, int end, char** text) { //changes the text
 	//function declaration without malloc is: char (*text)[1024]
 	int range = end - start + 1;
+	int i = 0;
 
-	for (int i = 0; i < range; i++) {
+	for (i = 0; i < range; i++) {
 		if (hash(start + i) == 0) {
 			//extension
 			lineCapacity += 1; //lineCapacity += range;
@@ -75,11 +76,11 @@ void change(int start, int end, char** text) { //changes the text
 	}
 	if (DEBUG_ACTIVE) {
 		printf("progressive:   ");
-		for (int i = 0; i <= lineCapacity; i++) {
+		for (i = 0; i <= lineCapacity; i++) {
 			printf("%d\t|", i);
 		}
 		printf("\naddress index: ");
-		for (int i = 0; i <= lineCapacity; i++) {
+		for (i = 0; i <= lineCapacity; i++) {
 			printf("%d\t|", linePointers[i]);
 		}
 		printf("\n");
@@ -87,7 +88,7 @@ void change(int start, int end, char** text) { //changes the text
 
 	int currentPos = hash(start);
 
-	for (int i = 0; i < range; i++) {
+	for (i = 0; i < range; i++) {
 		insertHashTable(currentPos, text[i]); //hashing here
 		start++;
 		currentPos = hash(start);
@@ -136,11 +137,9 @@ void delete(int start, int end) {
 	int i = hash(start);
 
 	while (hashTable[i] != NULL) {
-
 		if (hashTable[i]->deletedFlag == true) {
-			//jumps++;
+			//nothing
 		} else if (i >= hash(start) && i <= hash(end)) {
-			//jumps++;
 			newTomb->list[count] = i;
 			count++;
 			str->next = hashTable[i]->next;
@@ -215,7 +214,7 @@ void input(FILE *fp) { //fp is the file pointer passed from main
 			}
 
 		} else if (action == 'p') {
-			//print lines
+			//print lines, used only for the online compiler
 			for (int i = start; i <= end; i++) {
 				if (hashTable[hash(i)] != NULL) {
 					fputs(hashTable[hash(i)]->string, stdout); //only first string in each list
@@ -320,7 +319,7 @@ void debugPrintFullTable(bool showFullLineContents) { //prints all the lines in 
 
 int main(int argc, char *argv[]) {
 	//initializations
-	linePointers = (int*) malloc((lineCapacity + 1) * sizeof(int)); //modify this to have just one
+	linePointers = (int*) malloc(sizeof(int)); //modify this to have just one
 	linePointers[0] = 0;
 
 	//initialization of the list of deleted lines

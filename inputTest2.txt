@@ -1,0 +1,72 @@
+1,15c
+first
+second
+third
+fourth
+fifth
+sixth
+seventh
+eighth
+nineth
+tenth
+eleventh
+twelfth
+thirtheenth
+fourteenth
+fifteenth
+.
+16,18c
+sixteenth
+seventeenth
+eighteenth
+.
+1,5d
+6,8d
+3,4d
+1,5c
+prima
+seconda
+terza
+quarta
+quinta
+.
+2,2d
+7,10c
+new one
+new two
+new three
+new four
+.
+11,15c
+dio
+lama
+donna
+sesso
+quindici
+.
+16,20c
+this is just modified
+this one too
+this one is caused by the increase of the size of linepointers
+this one as well
+ecchista puru
+.
+16,18d
+1,3d
+14,27c
+arhaerzh
+<hrfeaya
+rstxztzhz
+zrtxhgzjzx
+ztgfjug
+rea<r5a4ea
+xbgztrtfgr
+ytiyutdyt
+yufhjujkfy
+d56756uegf
+ytujytcyj
+tte8tydyjut
+tru45w4ysh
+6ru8rdtu6
+.
+q

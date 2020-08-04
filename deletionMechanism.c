@@ -31,7 +31,7 @@ int main() {
 	}
 
 	listIntervals* list = (listIntervals*) malloc(sizeof(listIntervals));
-
+	/*
 	interval* hole = (interval*) malloc(sizeof(interval));
 	//first element is <0,0> by default
 	hole->low = 0;
@@ -41,7 +41,7 @@ int main() {
 	list->obj = *hole;
 	list->next = NULL;
 	free(hole);
-
+*/
 
 	updateHoles(20, 21, list);
 	updateHoles(3, 5, list);
@@ -114,6 +114,8 @@ void updateHoles(int newLow, int newHigh, listIntervals* list) {
 		list = list->next; //list advancement
 	}
 
+	//list is empty at the moment
+	list = newPiece;
 }
 
 void shiftIntervals(listIntervals *stack, int value) {
@@ -127,10 +129,10 @@ void shiftIntervals(listIntervals *stack, int value) {
 
 void updateVector(listIntervals* list, int vector[100]) {
 	//this function build up the vector using as reference the array of intervals
-	int jumps = -1; //number of places to jump, starts from -1 to take account of i=0 jumped by default
+	int jumps = 0; //number of places to jump, starts from -1 to take account of i=0 jumped by default
 	//i iterates through the vector and assigning the values
 
-	for (int i = 0; i < 100; i++) { //iteration through vector
+	for (int i = 1; i < 100; i++) { //iteration through vector
 		 if (list != NULL) {
 			 if (i >= list->obj.low && i <= list->obj.high) { //elements between an interval
 				 vector[i] = -1;

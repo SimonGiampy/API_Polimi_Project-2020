@@ -1,0 +1,21 @@
+1,10c
+this text serves to fix the memory leak of 680B, which I don't know where they come from
+it doesn't happen because of text copy mechanism
+probably in the deleted lines
+4
+5
+6
+7
+8
+9
+10
+.
+1,2d
+1,5c
+62394
+34634
+547254
+5424
+457653
+.
+q

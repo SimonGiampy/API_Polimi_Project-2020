@@ -57,7 +57,7 @@ int hash(int n) { //hash function with linear hashing
 void change(int start, int end, char** text) { //changes the text
 	//function declaration without malloc is: char (*text)[1024]
 	int range = end - start + 1;
-	int i = 0;
+	int i;
 
 	for (i = 0; i < range; i++) {
 		if (hash(start + i) == 0) {
@@ -70,8 +70,6 @@ void change(int start, int end, char** text) { //changes the text
 		} else if(hash(start + i) == -1) {
 			linePointers[start + i] = linePointers[start + i - 1] + 1;
 			//lineCapacity += 1;
-		} else if(hashTable[hash(start + i)]->deletedFlag == true) {
-			//TODO: check all the special cases for the deleted and test longer texts
 		}
 	}
 	if (DEBUG_ACTIVE) {
@@ -124,26 +122,28 @@ void debugPrintTombstones(delHistory *tombs) {
 void delete(int start, int end) {
 	int count = 0; //counter for tombstones
 	int forward = start; //counter for linePointers
+	int range = end - start + 1;
 
-	stringList *str = (stringList*) malloc(sizeof(stringList));
-	str->string = "";
-	str->deletedFlag = true;
+	stringList *str[range];
+	for (int i = 0; i < range; i++) {
+		str[i] = (stringList*) malloc(sizeof(stringList));
+	}
 
 	delHistory *newTomb = (delHistory *) malloc(sizeof(struct deletedHistory));
-	newTomb->number = end - start + 1;
+	newTomb->number = range;
 	newTomb->next = tombstones; //insert at the head of the linked list
 	newTomb->list = (int *) malloc(newTomb->number * sizeof(int));
 
 	int i = hash(start);
 
 	while (hashTable[i] != NULL) {
-		if (hashTable[i]->deletedFlag == true) {
-			//nothing
-		} else if (i >= hash(start) && i <= hash(end)) {
+		if (i >= hash(start) && i <= hash(end) && hashTable[i]->deletedFlag == false) {
 			newTomb->list[count] = i;
+			str[count]->next = hashTable[i];
+			str[count]->string = "";
+			str[count]->deletedFlag = true;
+			hashTable[i] = str[count];
 			count++;
-			str->next = hashTable[i]->next;
-			hashTable[i] = str;
 		} else if (hashTable[i]->deletedFlag == false) {
 			linePointers[forward] = i;
 			forward++;
@@ -210,7 +210,7 @@ void input(FILE *fp) { //fp is the file pointer passed from main
 
 			change(start, end, text);
 			if (DEBUG_ACTIVE) {
-				debugPrintFullTable(false);
+				debugPrintFullTable(true);
 			}
 
 		} else if (action == 'p') {
@@ -231,7 +231,7 @@ void input(FILE *fp) { //fp is the file pointer passed from main
 
 			delete(start, end);
 			if (DEBUG_ACTIVE) {
-				debugPrintFullTable(false);
+				debugPrintFullTable(true);
 			}
 
 		} else if (action == 'u' && end == 0) {
@@ -285,12 +285,11 @@ void quit() { //input = 'q'
 }
 
 void debugPrintFullHashLine(int index, stringList* pointer) { //prints all the contents in a single line of a hash table
-	printf("%d: ", index);
 	if (pointer->next == NULL) {
 		printf("%s --> null\n", pointer->string);
 	} else {
 		if (pointer->deletedFlag == false) {
-			printf("%s --> \n", pointer->string);
+			printf("%s --> ", pointer->string);
 		} else {
 			printf("DELETED --> ");
 		}
@@ -311,6 +310,7 @@ void debugPrintFullTable(bool showFullLineContents) { //prints all the lines in 
 		}
 	} else { //prints every string for every row
 		while (hashTable[i] != NULL) {
+			printf("%d: ", i);
 			debugPrintFullHashLine(i, hashTable[i]); //full hash line debug
 			i++;
 		}
@@ -329,7 +329,7 @@ int main(int argc, char *argv[]) {
 	tombstones->list = NULL;
 
 	if (DEBUG_ACTIVE) {
-		char fileName[] = "/home/simon/CS Project/TextEditor/inputTest2.txt"; //only for testing and debugging
+		char fileName[] = "/home/simon/CS Project/TextEditor/inputTest3.txt"; //only for testing and debugging
 		FILE *fp = fopen(fileName, "r"); //reads from a file, used for debugging
 		input(fp); //fp must be stdin when submitting the code on the platform
 	} else {

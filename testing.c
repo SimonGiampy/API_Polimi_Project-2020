@@ -1,23 +1,29 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <stdbool.h>
 
-void passing(char **text, int num) {
-    for (int i = 0; i < num; i++) {
-        printf("%d: %s\n", i, text[i]);
-    }
-}
+//int hash[2147483647];
+struct stringList { //single linked list for handling changes in the text
+		char* string;
+		bool deletedFlag;
+		struct stringList* next;
+};
+typedef struct stringList stringList;
+int hash[500000000];
 
-int main(int argc, char *argv[]) {
-    int num = 7; //number of rows
-    char **text = (char**) malloc(sizeof(char*) * num);
-    text[0] = "hfjf";
-    text[1] = "dfaadf";
-    text[2] = "sg<rde<";
-    text[3] = "ewTWTWwe";
-    text[4] = "dfaadf";
-    text[5] = "sg<rde<";
-    text[6] = "ewTWTWwe";
-    passing(text, num);
+int main() {
+    printf("%d\n", (int) sizeof(bool));
+	printf("%d\n", (int) sizeof(char*));
+	printf("%d\n", (int) sizeof(stringList));
+
+    stringList *str = (stringList*) malloc(sizeof(stringList));
+	str->string = "2kjsd<gdvl<sdjkvLSro IHIoGHW<ÒOEHGW GEHIOW HFEUIh< ÒKJfv<sdjbjvDJVBN GREBIG ";
+	str->deletedFlag = false;
+	str->next = str;
+	char string[] = "2kjsd<gdvl<sdjkvLSro IHIoGHW<ÒOEHGW GEHIOW HFEUIh< ÒKJfv<sdjbjvDJVBN GREBIG ";
+
+	printf("%d\n", (int) sizeof(string));
 
     return 0;
 }

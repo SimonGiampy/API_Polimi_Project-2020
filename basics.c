@@ -6,8 +6,10 @@
 //online compiler password: VMoY6CY1
 
 //maximum number of elements in the hash table
-#define HASH_TABLE_SIZE 2147483647 //this is not needed anymore
-#define DEBUG_ACTIVE 1 //debugging flag
+#define DEBUG_ACTIVE 0 //debugging flag
+//TODO: TimeForAChange has timeout, so an optimization for the change mechanism must be found
+//the problem shouldn't be in the delete function
+//TODO: fix memory leaks by testing it with big text test input files
 
 struct stringList { //single linked list for handling changes in the text
 	char* string;
@@ -15,6 +17,14 @@ struct stringList { //single linked list for handling changes in the text
 	struct stringList* next;
 };
 typedef struct stringList stringList;
+
+struct collection {
+	char** stack;
+	unsigned short currentPosition;
+	unsigned short size;
+	bool deletedFlag;
+};
+typedef struct collection collection;
 
 int* linePointers; //keeps track of every line position in the table
 int lineCapacity = 0; //number of lines used in the hash table
@@ -42,18 +52,18 @@ void delete(int start, int end);
 void debugPrintFullHashLine(int index, stringList* pointer);
 void debugPrintFullTable(bool showFullLineContents);
 void debugPrintTombstones(delHistory *tombs);
+void debugPrintNew(bool showFullLineContents);
 struct command* getCommand(char* input);
 void quit();
 
 //global variable that defines the hash table (array of pointers to stringList objects, rows start from 1)
-stringList **hashTable;
+collection **hashTable = NULL;
 int hashCapacity;
 
 int hash(int n) { //hash function with linear hashing
 	//needs to check and skip the deleted rows
-	if (n > lineCapacity) {
-		return 0;
-	} else if (linePointers[n] == -1) {
+	//NOTE: if a negative number n is passed as input, it means that the input test file has at its end a 'q' without '\n'
+	if (n > lineCapacity || linePointers[n] == -1) {
 		return 0;
 	} else return linePointers[n];
 }
@@ -88,13 +98,18 @@ void change(int start, int end, char** text) { //changes the text
 		printf("\n");
 	}
 	*/
-	int currentPos = hash(start);
+	int hashedEnd = hash(end);
+	if (hashedEnd > hashCapacity) { //increment size of hash table with a fast approximation, not every time it is needed
+		hashTable = realloc(hashTable, (hashedEnd + 1) * sizeof(collection));
 
-	if (hash(end) > hashCapacity) { //increment size of hash table with a fast approximation, not every time it is needed
-		hashTable = realloc(hashTable, (hashCapacity + range) * sizeof(stringList));
-		hashCapacity += range;
+		//extreme bug fix
+		for (int j = hashCapacity; j <= hashedEnd; j++) {
+			hashTable[j] = NULL;
+		}
+		hashCapacity = hashedEnd + 1;
 	}
 
+	int currentPos = hash(start);
 	for (i = 0; i < range; i++) { //every row is inserted in the hash table
 		insertHashTable(currentPos, text[i]);
 		start++;
@@ -103,24 +118,36 @@ void change(int start, int end, char** text) { //changes the text
 }
 
 void insertHashTable(int index, char *line) { //inserts single string in the hash table
-	stringList *str = (stringList*) malloc(sizeof(stringList));
-	str->string = line;
-	str->deletedFlag = false;
-	//insert in the head of a single linked list
-	if (hashTable[index] == NULL) {
-		str->next = NULL;
-	} else {
-		str->next = hashTable[index];
+	if (hashTable[index] != NULL) { //for some absurd reason this is executed when it must not
+		//increments stack size by one, and inserts a new element at the end
+		hashTable[index]->currentPosition += 1;
+
+		char** stack = realloc(hashTable[index]->stack, (hashTable[index]->size + 1) * sizeof(collection));
+		stack[hashTable[index]->currentPosition] = line;
+		hashTable[index]->size += 1;
+		hashTable[index]->stack = stack;
+	} else if (hashTable[index] == NULL) {
+		//creation of a new element in the table
+		collection *coll = (collection*) malloc(sizeof(collection));
+		coll->deletedFlag = false;
+		coll->size = 1;
+		coll->currentPosition = 0;
+
+		char** stack = (char**) malloc(sizeof(char*));
+		stack[0] = line;
+		coll->stack = stack;
+		hashTable[index] = coll;
+		//TODO: fix memory leak for certain input test files, like the n.3
 	}
-	hashTable[index] = str;
 }
 
 
-void delete(int start, int end) { //TODO: handle invalid delete addresses, which are not present in the table
+void delete(int start, int end) {
 	int count = 0; //counter for tombstones
 	int forward = start; //counter for linePointers
 	int range = end - start + 1;
 	int i = start;
+
 	while (i <= range) { //deals with useless delete calls on non-existent indexes in the hash table
 		if (hash(i) == 0) {
 			end = i - 1;
@@ -131,12 +158,6 @@ void delete(int start, int end) { //TODO: handle invalid delete addresses, which
 		}
 	}
 
-	stringList *str[range];
-	for (i = 0; i < range; i++) {
-		//allocates one deleted piece for every element to be deleted
-		str[i] = (stringList*) malloc(sizeof(stringList));
-	}
-
 	delHistory *newTomb = (delHistory *) malloc(sizeof(struct deletedHistory));
 	newTomb->number = range;
 	newTomb->next = tombstones; //insert at the head of the linked list
@@ -144,13 +165,10 @@ void delete(int start, int end) { //TODO: handle invalid delete addresses, which
 
 	i = hash(start);
 
-	while (hashTable[i] != NULL) {
+	while (hashTable[i] != NULL) { //fix here for the new mechanism
 		if (i >= hash(start) && i <= hash(end) && hashTable[i]->deletedFlag == false) {
 			newTomb->list[count] = i;
-			str[count]->next = hashTable[i];
-			str[count]->string = "";
-			str[count]->deletedFlag = true;
-			hashTable[i] = str[count];
+			hashTable[i]->deletedFlag = true;
 			count++;
 		} else if (hashTable[i]->deletedFlag == false) {
 			linePointers[forward] = i;
@@ -159,6 +177,7 @@ void delete(int start, int end) { //TODO: handle invalid delete addresses, which
 
 		i++;
 	}
+	//TODO: implement the mechanism for resizing the array linePointers, so all the -1s at the end get trimmed out
 	while (forward <= lineCapacity && linePointers[forward] != -1) {
 		//sets every number after the last one needed to -1 in the array linePointers
 		linePointers[forward] = -1;
@@ -204,7 +223,7 @@ void input(FILE *fp) { //fp is the file pointer passed from main
 
 	while (!feof(fp)) { //until the input file is not finished reading (end of file)
 		correctRead = fgets(buffer, 1024 + 2, fp);
-		assert(correctRead != NULL);
+		//assert(correctRead != NULL);
 
 		struct command* command = getCommand(buffer); //translates the line with the input (ind1,ind2)command in a struct containing the parameters
 		int start = command->start;
@@ -212,13 +231,14 @@ void input(FILE *fp) { //fp is the file pointer passed from main
 		int num = end - start + 1;
 		char action = command->command;
 		free(command);
+		//assert(end >= start && start >= 0 && end >=0);
 
 		if (action == 'c') {
 			//char **text = (char**) malloc(sizeof(char*) * num);
 			char *text[num]; //allocates an array of num strings, one for each line
 			for (int i = 0; i < num; i++) {
 				correctRead = fgets(buffer, 1024 + 2, fp);
-				assert(correctRead != NULL);
+				//assert(correctRead != NULL);
 				text[i] = (char*) malloc(sizeof(char) * strlen(buffer) + 1);
 				strcpy(text[i], buffer);
 				//text[i] = (char*) malloc(sizeof(char) * (1024 + 2));
@@ -226,14 +246,18 @@ void input(FILE *fp) { //fp is the file pointer passed from main
 				//assert(correctRead != NULL);
 			}
 			correctRead = fgets(buffer, 3, fp); //reads the terminal sequence of the input text ".\n\0" -> 3 chars
-			assert(correctRead != NULL);
-			assert(strcmp(buffer, ".\n") == 0); //exits in case there isn't a full stop, this should never be called
+			//assert(correctRead != NULL);
+			//assert(strcmp(buffer, ".\n") == 0); //exits in case there isn't a full stop, this should never be called
 			if (DEBUG_ACTIVE) {
-				//printf("-----------------change call\n");
+				printf("change sequence from %d to %d started:\n", start, end);
 			}
 			change(start, end, text);
+			//for (int i = 0; i < num; i++) {
+				//free(text[i]); //segfaults always
+			//}
+
 			if (DEBUG_ACTIVE) {
-				//debugPrintFullTable(true);
+				//debugPrintNew(true); //new method to test the correctness of the program
 			}
 
 		} else if (action == 'p') {
@@ -241,14 +265,16 @@ void input(FILE *fp) { //fp is the file pointer passed from main
 			if (DEBUG_ACTIVE) {
 				printf("print sequence from %d to %d started:\n", start, end);
 			}
+			collection *coll ;
 			for (int i = start; i <= end; i++) {
-				if (hashTable[hash(i)] != NULL) {
-					fputs(hashTable[hash(i)]->string, stdout); //only first string in each list
+				coll = hashTable[hash(i)];
+				if (coll != NULL) {
+					fputs(coll->stack[coll->currentPosition], stdout); //only first string in each list
 				} else {
 					fputs(".\n", stdout); //no string present in the selected line
 				}
-
 			}
+			//free(coll);
 		} else if (action == 'd') {
 			//delete lines, import from dynamic indexes
 			if (DEBUG_ACTIVE) {
@@ -271,34 +297,19 @@ void input(FILE *fp) { //fp is the file pointer passed from main
 }
 
 struct command* getCommand(char* input) { //translates the input string in a struct containing start, end and the action
-	if (strcmp(input, "q\n") == 0) { //equal strings
+	if (strcmp(input, "q\n") == 0 || strcmp(input, "q") == 0) { //equal strings
 		quit();
 	}
 
 	struct command *commando = (struct command*) malloc(sizeof(struct command));
-	int i = 0, comma = 1;
-	int start, end;
-	char action;
-
-	char *tmp = (char*) malloc(sizeof(char) * 9); //9 is the max number of digits since there are at most 2B lines
-	while (input[i] != '\n') {
-		if (input[i] == ',') {
-			strncpy(tmp, input, i); //take substring 1 before comma char
-			start = (int) strtol(tmp, NULL, 10); //converts substring in long number
-			comma = i; //comma position in the string
-		} else if (input[i] == 'c' || input[i] == 'd' || input[i] == 'p') {
-			strncpy(tmp, input + comma  + 1, i - comma  - 1); //take substring 2 before char 'c'
-			end = (int) strtol(tmp, NULL, 10); //converts substring in long number
-			action = input[i];
-		} else if (input[i] == 'u' || input[i] == 'r') {
-			action = input[i];
-			strncpy(tmp, input, i); //take substring 1 before action char
-			start = (int) strtol(tmp, NULL, 10);
-			end = 0; //undo and redo only take one input number
-		}
-		i++;
+	//new better error-free version
+	char* endPtr;
+	int start = (int) strtol(input, &endPtr, 10);
+	int end = 0;
+	if (*endPtr == ',') {
+		end = (int) strtol(endPtr + 1, &endPtr, 10);
 	}
-	free(tmp);
+	char action = *endPtr;
 
 	commando->start = start;
 	commando->end = end;
@@ -327,6 +338,32 @@ void debugPrintFullHashLine(int index, stringList* pointer) { //prints all the c
 	}
 }
 
+void debugPrintNew(bool showFullLineContents) {
+	int i = 1;
+	if (!showFullLineContents) { //only shows the first string for every line
+		while (hashTable[i] != NULL) {
+			if (hashTable[i]->deletedFlag == true) {
+				printf("DELETED\n");
+			} else {
+				unsigned short pos = hashTable[i]->currentPosition;
+				printf("%s", hashTable[i]->stack[pos]);
+			}
+			i++;
+		}
+	} else { //shows all the strings in the stack for every line in the table
+		while (hashTable[i] != NULL) {
+			printf("%d: ", i);
+			unsigned short pos = hashTable[i]->currentPosition;
+			for (int count = 0; count < hashTable[i]->size; count++) {
+				printf("%s -> ", hashTable[i]->stack[pos]);
+				pos--;
+			}
+			i++;
+			printf("\n");
+		}
+	}
+}
+
 void debugPrintFullTable(bool showFullLineContents) { //prints all the lines in the hash table from line 1 to max
 	int i = 1;
 	if (!showFullLineContents) { //prints only the first string for every row
@@ -334,14 +371,14 @@ void debugPrintFullTable(bool showFullLineContents) { //prints all the lines in 
 			if (hashTable[i]->deletedFlag == true) {
 				printf("DELETED\n");
 			} else {
-				printf("%s", hashTable[i]->string);
+				//printf("%s", hashTable[i]->string);
 			}
 			i++;
 		}
 	} else { //prints every string for every row
 		while (hashTable[i] != NULL) {
 			printf("%d: ", i);
-			debugPrintFullHashLine(i, hashTable[i]); //full hash line debug
+			//debugPrintFullHashLine(i, hashTable[i]); //full hash line debug
 			i++;
 		}
 	}
@@ -358,12 +395,13 @@ int main() {
 	tombstones->next = NULL;
 	tombstones->list = NULL;
 
-	hashCapacity = 10; //starting point for the hash table dimension
-	hashTable = realloc(hashTable, hashCapacity * sizeof(stringList));
+	hashCapacity = 1; //starting point for the hash table dimension
+	hashTable = realloc(hashTable, hashCapacity * sizeof(collection));
 
 	if (DEBUG_ACTIVE) {
-		//char fileName[] = "/home/simon/Downloads/test-cases-project/level4/test10.txt"; //only for testing and debugging
-		char fileName[] = "/home/simon/CS Project/TextEditor/inputTest3.txt";
+		//char fileName[] = "/home/simon/CS Project/Write_Only_1_input.txt";
+		char fileName[] = "/home/simon/Downloads/test-cases-project/level1/test500.txt"; //only for testing and debugging
+		//char fileName[] = "/home/simon/CS Project/TextEditor/inputTest1.txt";
 		FILE *fp = fopen(fileName, "r"); //reads from a file, used for debugging
 		input(fp); //fp must be stdin when submitting the code on the platform
 	} else {

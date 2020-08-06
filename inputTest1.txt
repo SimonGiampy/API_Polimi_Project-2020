@@ -1,0 +1,33 @@
+1,3c
+1. One man's constant is another man's variable.
+2. Functions delay binding; data structures induce binding. Moral: Structure data late in the programming process.
+3. Syntactic sugar causes cancer of the semicolon.
+.
+1,3p
+4,6c
+4. Every program is a part of some other program and rarely fits.
+5. If a program manipulates a large amount of data, it does so in a small number of ways.
+6. Symmetry is a complexity-reducing concept (co-routines include subroutines); seek it everywhere.
+.
+1,1p
+0,0p
+1,3p
+7,10c
+wetertse
+erteytre
+ertyertey
+treyetuyetu
+.
+0,10p
+1,2p
+3,3p
+11,13c
+weerfw
+ers
+d<ga<gr
+.
+0,0p
+1,1p
+1,2p
+q
+//this is a test for the seg fault in write only private test

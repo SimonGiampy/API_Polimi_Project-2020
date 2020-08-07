@@ -6,7 +6,7 @@
 //online compiler password: VMoY6CY1
 
 //maximum number of elements in the hash table
-#define DEBUG_ACTIVE 0 //debugging flag
+#define DEBUG_ACTIVE 1 //debugging flag
 //TODO: TimeForAChange has timeout, so an optimization for the change mechanism must be found
 //the problem shouldn't be in the delete function
 //TODO: fix memory leaks by testing it with big text test input files
@@ -49,8 +49,6 @@ void input(FILE *fp);
 int hash(int n);
 void change( int start, int end, char** text);
 void delete(int start, int end);
-void debugPrintFullHashLine(int index, stringList* pointer);
-void debugPrintFullTable(bool showFullLineContents);
 void debugPrintTombstones(delHistory *tombs);
 void debugPrintNew(bool showFullLineContents);
 struct command* getCommand(char* input);
@@ -85,7 +83,7 @@ void change(int start, int end, char** text) { //changes the text
 			linePointers[start + i] = linePointers[start + i - 1] + 1;
 		}
 	}
-	/*
+
 	if (DEBUG_ACTIVE) {
 		printf("progressive:   ");
 		for (i = 0; i <= lineCapacity; i++) {
@@ -97,7 +95,7 @@ void change(int start, int end, char** text) { //changes the text
 		}
 		printf("\n");
 	}
-	*/
+
 	int hashedEnd = hash(end);
 	if (hashedEnd > hashCapacity) { //increment size of hash table with a fast approximation, not every time it is needed
 		hashTable = realloc(hashTable, (hashedEnd + 1) * sizeof(collection));
@@ -126,6 +124,7 @@ void insertHashTable(int index, char *line) { //inserts single string in the has
 		stack[hashTable[index]->currentPosition] = line;
 		hashTable[index]->size += 1;
 		hashTable[index]->stack = stack;
+		hashTable[index]->deletedFlag = false;
 	} else if (hashTable[index] == NULL) {
 		//creation of a new element in the table
 		collection *coll = (collection*) malloc(sizeof(collection));
@@ -148,6 +147,11 @@ void delete(int start, int end) {
 	int range = end - start + 1;
 	int i = start;
 
+	/*if (hash(end) == 0) { //faster optimization
+		end = lineCapacity - 1;
+		range = end - start + 1;
+	}*/
+
 	while (i <= range) { //deals with useless delete calls on non-existent indexes in the hash table
 		if (hash(i) == 0) {
 			end = i - 1;
@@ -157,6 +161,7 @@ void delete(int start, int end) {
 			i++;
 		}
 	}
+
 
 	delHistory *newTomb = (delHistory *) malloc(sizeof(struct deletedHistory));
 	newTomb->number = range;
@@ -185,7 +190,7 @@ void delete(int start, int end) {
 	}
 
 	tombstones = newTomb; //changes the list of tombstones by accessing at its address
-	/*
+
 	if (DEBUG_ACTIVE) {
 		printf("progressive:   ");
 		for (i = 0; i <= lineCapacity; i++) {
@@ -198,7 +203,7 @@ void delete(int start, int end) {
 		printf("\n");
 		debugPrintTombstones(tombstones);
 	}
-	*/
+
 }
 
 void debugPrintTombstones(delHistory *tombs) {
@@ -223,7 +228,7 @@ void input(FILE *fp) { //fp is the file pointer passed from main
 
 	while (!feof(fp)) { //until the input file is not finished reading (end of file)
 		correctRead = fgets(buffer, 1024 + 2, fp);
-		//assert(correctRead != NULL);
+		assert(correctRead != NULL);
 
 		struct command* command = getCommand(buffer); //translates the line with the input (ind1,ind2)command in a struct containing the parameters
 		int start = command->start;
@@ -238,7 +243,7 @@ void input(FILE *fp) { //fp is the file pointer passed from main
 			char *text[num]; //allocates an array of num strings, one for each line
 			for (int i = 0; i < num; i++) {
 				correctRead = fgets(buffer, 1024 + 2, fp);
-				//assert(correctRead != NULL);
+				assert(correctRead != NULL);
 				text[i] = (char*) malloc(sizeof(char) * strlen(buffer) + 1);
 				strcpy(text[i], buffer);
 				//text[i] = (char*) malloc(sizeof(char) * (1024 + 2));
@@ -246,8 +251,8 @@ void input(FILE *fp) { //fp is the file pointer passed from main
 				//assert(correctRead != NULL);
 			}
 			correctRead = fgets(buffer, 3, fp); //reads the terminal sequence of the input text ".\n\0" -> 3 chars
-			//assert(correctRead != NULL);
-			//assert(strcmp(buffer, ".\n") == 0); //exits in case there isn't a full stop, this should never be called
+			assert(correctRead != NULL);
+			assert(strcmp(buffer, ".\n") == 0); //exits in case there isn't a full stop, this should never be called
 			if (DEBUG_ACTIVE) {
 				printf("change sequence from %d to %d started:\n", start, end);
 			}
@@ -278,12 +283,12 @@ void input(FILE *fp) { //fp is the file pointer passed from main
 		} else if (action == 'd') {
 			//delete lines, import from dynamic indexes
 			if (DEBUG_ACTIVE) {
-				//printf("-----------------delete call %d,%d\n", start, end);
+				printf("-----------------delete call %d,%d\n", start, end);
 			}
 
 			delete(start, end);
 			if (DEBUG_ACTIVE) {
-				//debugPrintFullTable(true);
+				debugPrintNew(true);
 			}
 
 		} else if (action == 'u' && end == 0) {
@@ -319,23 +324,11 @@ struct command* getCommand(char* input) { //translates the input string in a str
 
 void quit() { //input = 'q'
 	//these lines for freeing memory are actually unnecessary and don't benefit the memory usage
+	debugPrintNew(true);
 	free(linePointers);
 	free(tombstones);
 	free(hashTable);
 	exit(0);
-}
-
-void debugPrintFullHashLine(int index, stringList* pointer) { //prints all the contents in a single line of a hash table
-	if (pointer->next == NULL) {
-		printf("%s --> null\n", pointer->string);
-	} else {
-		if (pointer->deletedFlag == false) {
-			printf("%s --> ", pointer->string);
-		} else {
-			printf("DELETED --> ");
-		}
-		debugPrintFullHashLine(index, pointer->next);
-	}
 }
 
 void debugPrintNew(bool showFullLineContents) {
@@ -364,25 +357,6 @@ void debugPrintNew(bool showFullLineContents) {
 	}
 }
 
-void debugPrintFullTable(bool showFullLineContents) { //prints all the lines in the hash table from line 1 to max
-	int i = 1;
-	if (!showFullLineContents) { //prints only the first string for every row
-		while (hashTable[i] != NULL) {
-			if (hashTable[i]->deletedFlag == true) {
-				printf("DELETED\n");
-			} else {
-				//printf("%s", hashTable[i]->string);
-			}
-			i++;
-		}
-	} else { //prints every string for every row
-		while (hashTable[i] != NULL) {
-			printf("%d: ", i);
-			//debugPrintFullHashLine(i, hashTable[i]); //full hash line debug
-			i++;
-		}
-	}
-}
 
 int main() {
 	//initializations
@@ -400,13 +374,15 @@ int main() {
 
 	if (DEBUG_ACTIVE) {
 		//char fileName[] = "/home/simon/CS Project/Write_Only_1_input.txt";
-		char fileName[] = "/home/simon/Downloads/test-cases-project/level1/test500.txt"; //only for testing and debugging
-		//char fileName[] = "/home/simon/CS Project/TextEditor/inputTest1.txt";
+		//char fileName[] = "/home/simon/Downloads/test-cases-project/level4/test10.txt"; //only for testing and debugging
+		char fileName[] = "/home/simon/CS Project/TextEditor/inputTest3.txt";
 		FILE *fp = fopen(fileName, "r"); //reads from a file, used for debugging
 		input(fp); //fp must be stdin when submitting the code on the platform
+
 	} else {
 		input(stdin);
 	}
+
 
 	return 0;
 }

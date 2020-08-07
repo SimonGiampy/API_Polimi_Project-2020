@@ -3,6 +3,7 @@
 //
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 
 
 struct intervalTree {
@@ -18,47 +19,52 @@ typedef struct intervalTree intervalTree;
 
 
 void printInorderTrasversal(intervalTree *node);
-void printPreorderTrasversal(intervalTree* node);
 intervalTree* leftmostNode(intervalTree* node);
-intervalTree* rightmostNode(intervalTree* node);
 intervalTree* inOrderNextNode(intervalTree* root, intervalTree* node);
 void repairTree(intervalTree **root, intervalTree *z);
 void leftRotate(intervalTree **root, intervalTree *x);
 void rightRotate(intervalTree **root,intervalTree *y);
-void insertInterval(int a, int b);
+void insertInterval(intervalTree **root, int a, int b);
 
-intervalTree *tree; //global variable that store the entire tree structure
+//intervalTree *tree; //global variable that store the entire tree structure
 
-// Left Rotation procedure for maintaining the balance property for the trees
+// Left Rotation
 void leftRotate(intervalTree **root, intervalTree *x) {
-	if (x == NULL || x->right == NULL)
+	if (x == NULL || !x->right)
 		return ;
 	//y stored pointer of right child of x
 	intervalTree *y = x->right;
 
-	x->right = y->left; //store y's left subtree's pointer as x's right child
+	//store y's left subtree's pointer as x's right child
+	x->right = y->left;
 
+	//update parent pointer of x's right
 	if (x->right != NULL) {
-		x->right->parent = x; //update parent pointer of x's right
+		x->right->parent = x;
 	}
+	//update y's parent pointer
+	y->parent = x->parent;
 
-	y->parent = x->parent; //update y's parent pointer
-
+	// if x's parent is null make y as root of tree
 	if (x->parent == NULL) {
-		(*root) = y; // if x's parent is null make y as root of tree
+		(*root) = y;
+		// store y at the place of x
 	} else if (x == x->parent->left) {
-		x->parent->left = y; // store y at the place of x
+		x->parent->left = y;
 	} else {
 		x->parent->right = y;
 	}
 
-	y->left = x; // make x as left child of y
-	x->parent = y; //update parent pointer of x
+	// make x as left child of y
+	y->left = x;
+
+	//update parent pointer of x
+	x->parent = y;
 }
 
-// Right Rotation (similar to leftRotate)
+// Right Rotation (Similar to leftRotate)
 void rightRotate(intervalTree **root, intervalTree *y) {
-	if (y == NULL || y->left != NULL)
+	if (y == NULL || !y->left)
 		return ;
 	intervalTree *x = y->left;
 	y->left = x->right;
@@ -151,7 +157,7 @@ void repairTree(intervalTree **root, intervalTree *z) {
 }
 
 // Utility function to insertInterval newly node in RedBlack tree
-void insertInterval(int a, int b) {
+void insertInterval(intervalTree **root, int a, int b) {
 	int data = (a + b) / 2 ; //approx by defect
 	// Allocate memory for new node
 	intervalTree *newNode = (intervalTree*) malloc(sizeof(intervalTree));
@@ -161,13 +167,12 @@ void insertInterval(int a, int b) {
 	newNode->parent = NULL;
 	newNode->a = a;
 	newNode->b = b;
-	intervalTree** root = &tree;
+	//intervalTree** root = &tree;
 
 	//if root is null make newNode as root
 	if (*root == NULL) {
 		newNode->color = 'B';
 		(*root) = newNode;
-		newNode->sum = b - a + 1;
 	} else {
 		intervalTree *y = NULL;
 		intervalTree *x = (*root);
@@ -175,63 +180,46 @@ void insertInterval(int a, int b) {
 		//follows standard BST procedure to insert the node in the right place
 		while (x != NULL) {
 			y = x;
-			if (newNode->b < x->a || (newNode->a < x->a && newNode->b > x->b)) {
+			if (newNode->data < x->data) {
 				x = x->left;
-			} else {
+			} else if (newNode->data >= x->data) {
 				x = x->right;
 			}
-			/*
-			if (newNode->b < x->a) {
-				x = x->left;
-			} else if (newNode->a > x->b) {
-				x = x->right;
-			} else if (newNode->a < x->a && newNode->b > x->b) {
-				x = x->left;
-			} else {//if (newNode->a >= x->a && newNode->b <= x->b) {
-				x = x->right;
-			}
-			 */
 		}
 
 		newNode->parent = y;
-		if (newNode->b < y->a || (newNode->a < y->a && newNode->b > y->b)) {
-			y->left = newNode;
+		if (newNode->data > y->data) {
+			y->right = newNode;
 		} else {
-			y->right = newNode;
-		}
-		/*
-		if (newNode->b < y->a) {
 			y->left = newNode;
-		} else if (newNode->a > y->b) {
-			y->right = newNode;
-		} else if (newNode->a < y->a && newNode->b > y->b) {
-			y->left = newNode;
-		} else {
-			y->right = newNode;
 		}
-		 */
-
 		newNode->color = 'R';
+
 		// call insertFixUp to fix reb-black tree's property if it is violated due to insertion.
 		repairTree(root, newNode);
 	}
 }
 
 // A utility function to traverse Red-Black tree in in-order fashion
-void printInorderTrasversal(intervalTree *node) {
-	if (node == NULL) return;
+void printInorderTrasversal(intervalTree *root) {
+	if (root == NULL) return;
 
-	printInorderTrasversal(node->left);
-	printf("<%d,%d,%d> - ", node->a, node->b, node->sum);
-	printInorderTrasversal(node->right);
+	printInorderTrasversal(root->left);
+	printf("%d ", root->data);
+
+	printInorderTrasversal(root->right);
 }
 
-void printPreorderTrasversal(intervalTree* node) {
+void printPreorderTrasversal(intervalTree* node)
+{
 	if (node == NULL) return;
 
-	printf("<%d,%d,%d> - ", node->a, node->b, node->sum); //prints data of the node
-	printPreorderTrasversal(node->left); // then recur on left subtree
-	printPreorderTrasversal(node->right); // now recur on right subtree
+	// first print data of node
+	printf("%d ", node->data);
+	// then recur on left subtree
+	printPreorderTrasversal(node->left);
+	// now recur on right subtree
+	printPreorderTrasversal(node->right);
 }
 
 
@@ -252,6 +240,7 @@ intervalTree* inOrderNextNode(intervalTree* root, intervalTree* node) {
 // Given a non-empty binary search tree, return the minimum data value found in that tree.
 intervalTree* leftmostNode(intervalTree* node) {
 	intervalTree* current = node;
+
 	// loop down to find the leftmost leaf
 	while (current->left != NULL) {
 		current = current->left;
@@ -259,45 +248,35 @@ intervalTree* leftmostNode(intervalTree* node) {
 	return current;
 }
 
-intervalTree* rightmostNode(intervalTree* node) {
-	intervalTree* current = node;
-	// loop down to find the rightmost leaf
-	while (current->right != NULL) {
-		current = current->right;
+
+int main() { //this implementation uses the address of the tree to pass as parameter for insertion
+	srandom(time(0));
+	intervalTree *root = NULL;
+	//random insertion of 10 elements from 0 to 100
+	int numbers[100];
+	for (int i = 0; i < 100; ++i) {
+		numbers[i] = (int) random() % (1000 + 1);
 	}
-	return current;
-}
 
-
-//TODO: implement adjust sums procedure from current inserted node, and going right til the right-most leaf
-
-int main() { //this implementation uses global variable tree to access its values
-	printf("size of struct node is %d bytes\n", (int) sizeof(intervalTree));
-
-
+	clock_t t0 = clock();
+	//random insertion of 10 elements from 0 to 100
+	for (int i = 0; i < 100; ++i) {
+		insertInterval(&root, numbers[i], numbers[i] + 15);
+	}
+	/*
 	insertInterval(5, 8);
 	insertInterval(10, 12);
 	insertInterval(15, 18);
-	insertInterval(13, 20);
-	insertInterval(21, 24);
-	insertInterval(31,40);
-	insertInterval(14, 19);
-	insertInterval(4, 9);
-	insertInterval(1, 3);
-	insertInterval(26, 29);
+	*/
+	printf("size of struct node is %d\n", (int) sizeof(intervalTree));
 
-
-	//printf("pre-order Traversal:\n");
-	//printPreorderTrasversal(tree);
-	//printf("\n");
-
-	printf("in-order Traversal:\n");
-	printInorderTrasversal(tree);
+	clock_t t1 = clock();
+	printf("in-order Traversal Is :\n");
+	printInorderTrasversal(root);
 	printf("\n");
-
-	intervalTree *leftmost = leftmostNode(tree);
-	printf("left-most node is : <%d,%d>", leftmost->a, leftmost->b);
-
+	float time_taken = (float)(t1 - t0) / CLOCKS_PER_SEC * 1000;
+	printf("insertion took %fms\n", time_taken);
 
 	return 0;
 }
+

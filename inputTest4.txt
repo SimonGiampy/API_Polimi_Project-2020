@@ -1,0 +1,20 @@
+1,2c
+89. One does not learn computing by using a hand calculator, but one can forget arithmetic.
+30. In programming, everything we do is a special case of something more general -- and often we know it too quickly.
+.
+1,2d
+1,3p
+1,1c
+112. Computer Science is embarrassed by the computer.
+.
+1,2d
+1,3p
+1,2c
+28. Around computers it is difficult to find the correct unit of time to measure progress. Some cathedrals took a century to complete. Can you imagine the grandeur and scope of a program that would take as long?
+43. In software systems, it is often the early bird that makes the worm.
+.
+1,2d
+1,3p
+1,1d
+1,3p
+q

@@ -39,51 +39,96 @@ void removalUtility2(intervalTree* node);
 void removalUtility1(intervalTree* node);
 void deleteNode(intervalTree *node);
 
+void adjustSums(intervalTree *node);
+int lookupCumulativeSums(int value);
+void showTreeStructure(intervalTree* node);
+void shiftSums(intervalTree *node, int num);
+
 intervalTree *tree; //global variable that store the entire tree structure
 
 // Left Rotation procedure for maintaining the balance property for the trees
 void leftRotate(intervalTree *x) {
 	if (x == NULL || x->right == NULL)
 		return ;
-	//y stored pointer of right child of x
-	intervalTree *y = x->right;
-	x->right = y->left; //store y's left subtree's pointer as x's right child
+	intervalTree* y = x->right;
+	intervalTree* p = getParent(x);
+	// Since the leaves of a red-black tree are empty, they cannot become internal nodes.
+	x->right = y->left;
+	y->left = x;
+	x->parent = y;
+	// Handle other child/parent pointers.
 	if (x->right != NULL) {
-		x->right->parent = x; //update parent pointer of x's right
-	}
-	y->parent = x->parent; //update y's parent pointer
-	if (x->parent == NULL) {
-		(*tree) = *y; // if x's parent is null make y as root of tree
-	} else if (x == x->parent->left) {
-		x->parent->left = y; // store y at the place of x
-	} else {
-		x->parent->right = y;
+		x->right->parent = x;
 	}
 
-	y->left = x; // make x as left child of y
-	x->parent = y; //update parent pointer of x
+	// Initially n could be the root.
+	if (p != NULL) {
+		if (x == p->left) {
+			p->left = y;
+		} else if (x == p->right) {
+			p->right = y;
+		}
+	}
+	y->parent = p;
 }
 
 // Right Rotation (similar to leftRotate)
 void rightRotate(intervalTree *y) {
 	if (y == NULL || y->left != NULL)
 		return ;
-	intervalTree *x = y->left;
+	intervalTree *x = y->left; //x must be not null
 	y->left = x->right;
+	x->right = y; //added line
+	y->parent = x; //added line
 
-	if (x->right != NULL) {
-		x->right->parent = y;
+	if (y->left != NULL) {
+		y->left->parent = y;
 	}
-	x->parent =y->parent;
-	if (x->parent == NULL) {
-		(*tree) = *x;
-	} else if (y == y->parent->left) {
-		y->parent->left = x;
-	} else  {
-		y->parent->right = x;
+	intervalTree *p = getParent(y);
+	// Initially n could be the root.
+	if (p != NULL) {
+		if (y == p->left) {
+			p->left = x;
+		} else if (y == p->right) {
+			p->right = x;
+		}
 	}
-	x->right = y;
-	y->parent = x;
+	x->parent = p;
+}
+
+void wikipediaRBTFixup(intervalTree* node) {
+	if (getParent(node) == NULL) {
+		node->color = 'B';
+	} else if (getParent(node)->color == 'B') {
+		return;
+	} else if (getSibling(getParent(node)) != NULL && getSibling(getParent(node))->color == 'R') {
+		getParent(node)->color = 'B';
+		(getSibling(getParent(node)))->color = 'B';
+		(getParent(getParent(node)))->color = 'R';
+		wikipediaRBTFixup(getParent(getParent(node)));
+	} else {
+		intervalTree* p = getParent(node);
+		intervalTree* g = getParent(getParent(node));
+
+		if (node == p->right && p == g->left) {
+			leftRotate(p);
+			node = node->left;
+		} else if (node == p->left && p == g->right) {
+			rightRotate(p);
+			node = node->right;
+		}
+
+		p = getParent(node);
+		g = getParent(getParent(node));
+
+		if (node == p->left) {
+			rightRotate(g);
+		} else {
+			leftRotate(g);
+		}
+		p->color = 'B';
+		g->color = 'R';
+	}
 }
 
 // Utility function to fixup the Red-Black tree after standard BST insertion
@@ -188,17 +233,97 @@ void insertInterval(int a, int b) {
 			}
 		}
 
+		/*
 		newNode->parent = y;
 		if (newNode->b < y->a || (newNode->a < y->a && newNode->b > y->b)) {
 			y->left = newNode;
 		} else {
 			y->right = newNode;
 		}
+		 */
+		newNode->parent = tree;
 
 		newNode->color = 'R';
 		// call insertFixUp to fix reb-black tree's property if it is violated due to insertion.
-		repairTree(newNode);
+		wikipediaRBTFixup(newNode);
+		// Find the new root to return.
+		intervalTree* newRoot = newNode;
+		while (getParent(newRoot) != NULL) {
+			newRoot = getParent(newRoot);
+		}
+		tree = newRoot;
 	}
+
+}
+
+void adjustSums(intervalTree *node) {
+	intervalTree *prev = inOrderPreviousNode(node);
+	if (prev == NULL) { //is the leftmost node
+		node->sum = node->b - node->a + 1;
+		shiftSums(node, node->sum);
+	} else {
+		if (prev->b < node->a) { //detached intervals
+			node->sum = node->b - node->a + 1 + prev->sum;
+		} else if (prev->b > node->b && prev->a < node->a) { //overlapping intervals
+			//search for bigger interval here
+			//TODO: fix here and continue writing code
+			//calculation of sum
+			node->sum = prev->sum - (prev->b - node->b);
+		}
+	}
+}
+
+void shiftSums(intervalTree *node, int num) {
+	intervalTree *next = inOrderNextNode(node);
+	while (next != NULL) {
+		next->sum += num;
+		next = inOrderNextNode(node);
+	}
+}
+
+void showTreeStructure(intervalTree* node) {
+	if (node != NULL) {
+		printf("node<%d,%d>: ", node->a, node->b);
+		if (node->left != NULL) {
+			printf("sx:<%d,%d> ", node->left->a, node->left->b);
+		} else {
+			printf("sx:NULL ");
+		}
+		if (node->right != NULL) {
+			printf("dx:<%d,%d> ", node->right->a, node->right->b);
+		} else {
+			printf("dx:NULL ");
+		}
+		printf("\n");
+	} else {
+		return;
+	}
+	showTreeStructure(node->left);
+	showTreeStructure(node->right);
+}
+
+int lookupCumulativeSums(int value) {
+	intervalTree *node = tree;
+	while(node != NULL) {
+		if (value <= node->b && value >= node->a) {
+			//found and do calculations
+			value += node->sum;
+			//count how many holes to skip using directly the hash table
+		} else if (node->left != NULL) {
+			if (value > node->left->b && value < node->a) {
+				//found
+				//do calculations
+			}
+		}
+		if (node->right != NULL) {
+			if (value < node->right->a && value > node->b) {
+				//found
+				//do calculations
+			}
+		}
+	}
+
+	return 0;
 }
 
 // A utility function to traverse Red-Black tree in in-order fashion (from the minimum value to the max value)
@@ -283,17 +408,22 @@ int main() { //this implementation uses global variable tree to access its value
 
 
 	insertInterval(5, 8);
-	insertInterval(43, 50);
 	insertInterval(10, 12);
+	insertInterval(45, 46);
+	insertInterval(44, 48);
+	insertInterval(43, 49);
 	insertInterval(15, 18);
 	insertInterval(13, 20);
 	insertInterval(23, 25);
-	insertInterval(21, 40);
+	insertInterval(42, 50);
+	insertInterval(51, 54);
 	insertInterval(35, 38);
 	insertInterval(14, 19);
 	insertInterval(1, 3);
+	insertInterval(40, 55);
+	insertInterval(56, 58);
 	insertInterval(26, 29);
-
+	insertInterval(21, 60);
 
 	//printf("pre-order Traversal:\n");
 	//printPreorderTrasversal(tree);
@@ -303,31 +433,7 @@ int main() { //this implementation uses global variable tree to access its value
 	printInorderTrasversal(tree);
 	printf("\n");
 
-	//printExtra(tree);
-	intervalTree *found;
-	found = searchInterval(13, 20);
-	if (found != NULL) {
-		deleteNode(found);
-	}
-	found = searchInterval(43, 50);
-	if (found != NULL) {
-		deleteNode(found);
-	}
-	found = searchInterval(1, 3);
-	printf("found node is: <%d,%d,%d> \n", found->a, found->b, found->sum);
-	if (found != NULL) {
-		deleteNode(found);
-	}
-	found = searchInterval(21, 40);
-	printf("found node is: <%d,%d,%d> \n", found->a, found->b, found->sum);
-	if (found != NULL) {
-		deleteNode(found);
-	}
-
-
-	printf("in-order Traversal:\n");
-	printInorderTrasversal(tree);
-	printf("\n");
+	showTreeStructure(tree);
 
 	return 0;
 }

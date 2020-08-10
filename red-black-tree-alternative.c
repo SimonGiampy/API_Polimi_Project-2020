@@ -26,8 +26,29 @@ void leftRotate(intervalTree **root, intervalTree *x);
 void rightRotate(intervalTree **root,intervalTree *y);
 void insertInterval(intervalTree **root, int a, int b);
 
-//intervalTree *tree; //global variable that store the entire tree structure
+void showTreeStructure(intervalTree* node);
 
+//intervalTree *tree; //global variable that store the entire tree structure
+void showTreeStructure(intervalTree* node) {
+	if (node != NULL) {
+		printf("node<%d>: ", node->data);
+		if (node->left != NULL) {
+			printf("sx:<%d> ", node->left->data);
+		} else {
+			printf("sx:NULL ");
+		}
+		if (node->right != NULL) {
+			printf("dx:<%d> ", node->right->data);
+		} else {
+			printf("dx:NULL ");
+		}
+		printf("\n");
+	} else {
+		return;
+	}
+	showTreeStructure(node->left);
+	showTreeStructure(node->right);
+}
 // Left Rotation
 void leftRotate(intervalTree **root, intervalTree *x) {
 	if (x == NULL || !x->right)
@@ -253,15 +274,15 @@ int main() { //this implementation uses the address of the tree to pass as param
 	srandom(time(0));
 	intervalTree *root = NULL;
 	//random insertion of 10 elements from 0 to 100
-	int numbers[100];
-	for (int i = 0; i < 100; ++i) {
-		numbers[i] = (int) random() % (1000 + 1);
+	int numbers[20];
+	for (int i = 0; i < 20; ++i) {
+		numbers[i] = (int) random() % (100 + 1);
 	}
 
 	clock_t t0 = clock();
 	//random insertion of 10 elements from 0 to 100
-	for (int i = 0; i < 100; ++i) {
-		insertInterval(&root, numbers[i], numbers[i] + 15);
+	for (int i = 0; i < 20; ++i) {
+		insertInterval(&root, numbers[i], numbers[i] + 4);
 	}
 	/*
 	insertInterval(5, 8);
@@ -277,6 +298,7 @@ int main() { //this implementation uses the address of the tree to pass as param
 	float time_taken = (float)(t1 - t0) / CLOCKS_PER_SEC * 1000;
 	printf("insertion took %fms\n", time_taken);
 
+	showTreeStructure(root);
 	return 0;
 }
 

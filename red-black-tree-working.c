@@ -3,6 +3,7 @@
 //
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 
 struct intervalTree {
 	struct intervalTree *left;
@@ -10,7 +11,6 @@ struct intervalTree {
 	struct intervalTree *parent;
 	int a, b;
 	int sum;
-	int data;
 	int extra; //additional property with specific objective
 	char color; //TODO: change color property with a signed integer sum (red if sum<0, black otherwise) to save space
 };
@@ -34,6 +34,7 @@ void redBlackTreeRemovalFixup2(intervalTree* node);
 void redBlackTreeRemovalFixup1(intervalTree* node);
 void deleteNode(intervalTree *node);
 void showTreeStructure(intervalTree* node);
+void adjustParameters(intervalTree* element);
 
 intervalTree *tree; //global variable that stores the entire tree structure, pointer to the root node
 
@@ -136,8 +137,8 @@ void insertInterval(int a, int b) {
 	newNode->parent = NULL;
 	newNode->a = a;
 	newNode->b = b;
-	newNode->data = (a + b)/2;
 	newNode->sum = b - a + 1;
+	newNode->extra = b;
 
 	intervalTree *y = NULL;
 	intervalTree *x = tree;
@@ -170,6 +171,8 @@ void insertInterval(int a, int b) {
 		newRoot = getParent(newRoot);
 	}
 	tree = newRoot;
+
+	adjustParameters(newNode);
 }
 
 //displays the tree structure with the form: node value, left subtree, right subtree, for every node in the tree
@@ -197,9 +200,9 @@ void showTreeStructure(intervalTree* node) {
 // A utility function to traverse Red-Black tree in in-order fashion (from the minimum value to the max value)
 void printInorderTrasversal(intervalTree *node) {
 	if (node == NULL) return;
-
+	//format for the node's description is <a,b,sum,extra>
 	printInorderTrasversal(node->left);
-	printf("<%d,%d,%d> - ", node->a, node->b, node->sum);
+	printf("<%d,%d,%d,%d> - ", node->a, node->b, node->sum, node->extra);
 	printInorderTrasversal(node->right);
 }
 // A utility function to traverse Red-Black tree in pre-order fashion (parent --> left child --> right child)
@@ -255,8 +258,67 @@ intervalTree* rightmostNode(intervalTree* node) {
 	return current;
 }
 
+bool isRed(int sum) { //returns false if the node is black, true if it's red
+	if (sum < 0) {
+		return false; //black node
+	} else if (sum > 0) {
+		return true; //red node
+	} else {
+		return NULL; //never happens since the sum can't be == 0
+	}
+}
+bool isBlack(int sum) { //returns false if the node is black, true if it's red
+	if (sum < 0) {
+		return true; //black node
+	} else if (sum > 0) {
+		return false; //red node
+	} else {
+		return NULL; //never happens since the sum can't be == 0
+	}
+}
+int abs(int value) { //return absolute integer value of an input value
+	if (value < 0) {
+		return -value;
+	} else return value;
+}
+void copyColor(intervalTree* source, intervalTree* dest) {
+	if ((source->sum > 0 && dest->sum < 0) || (source->sum < 0 && dest->sum > 0)) {
+		dest->sum = -dest->sum; //change color in the case the two nodes have different colors
+	}
+}
+void assignColor(char color, intervalTree* dest) {
+	if (color == 'R') {
+		if (dest->sum < 0) {
+			dest->sum = - dest->sum;
+		}
+	} else if (color == 'B') {
+		if (dest->sum > 0) {
+			dest->sum = - dest->sum;
+		}
+	}
+}
 
 //TODO: implement adjust sums procedure from current inserted node, and going right til the right-most leaf
+void adjustParameters(intervalTree* element) {
+	intervalTree *current = inOrderPreviousNode(element);
+	if (current!= NULL && current->extra < element->a) {
+		element->sum += current->sum;
+	}
+	current = inOrderNextNode(element);
+	int holes = 0;
+	while (current != NULL && current->b < element->extra) {
+		current->extra = element->extra;
+		current->sum = element->sum;
+		holes += (current->b - current->a + 1);
+		current = inOrderNextNode(current);
+	}
+	holes = element-> b - element->a + 1 - holes;
+	while (current != NULL) {
+		current->sum += holes;
+		current = inOrderNextNode(current);
+	}
+}
+
 
 int main() { //this implementation uses global variable tree to access its values
 	printf("size of intervalTree is %d bytes\n", (int) sizeof(intervalTree));
@@ -268,12 +330,12 @@ int main() { //this implementation uses global variable tree to access its value
 	insertInterval(44, 48);
 	insertInterval(43, 49);
 	insertInterval(15, 18);
+	insertInterval(14, 19);
 	insertInterval(13, 20);
 	insertInterval(23, 25);
 	insertInterval(42, 52);
 	insertInterval(53, 54);
 	insertInterval(35, 38);
-	insertInterval(14, 19);
 	insertInterval(62, 65);
 	insertInterval(66, 67);
 	insertInterval(1, 3);
@@ -285,17 +347,10 @@ int main() { //this implementation uses global variable tree to access its value
 	insertInterval(70,80);
 	insertInterval(68, 69);
 
-
 	printf("in-order Traversal:\n");
 	printInorderTrasversal(tree);
 	printf("\n");
-	showTreeStructure(tree);
-
-	deleteNode(searchInterval(42, 52)); //if the node has 2 child pointers the procedure is bugged
-	printf("in-order Traversal after deletions:\n");
-	printInorderTrasversal(tree);
-	printf("\n");
-	showTreeStructure(tree);
+	//showTreeStructure(tree);
 
 	return 0;
 }

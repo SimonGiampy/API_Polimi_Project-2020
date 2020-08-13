@@ -9,12 +9,17 @@ struct intervalTree {
 	struct intervalTree *left;
 	struct intervalTree *right;
 	struct intervalTree *parent;
-	int a, b;
-	int sum;
-	int extra; //additional property with specific objective
-	char color; //TODO: change color property with a signed integer sum (red if sum<0, black otherwise) to save space
+	int a, b; //intervals represent a range from a to b
+	int skips; //calculates the number of deleted elements until the right endpoint b included
+	//additional properties for knowing where the bigger overlapping interval is, that includes the smaller ones
+	int highEndpoint;
+	//identifies the corresponding a value of its overlapping bigger interval, which includes the smaller ones
+	int lowEndpoint;
+	char color; //can be 'R' or 'B' if the node is red or black
 };
-typedef struct intervalTree intervalTree;
+typedef struct intervalTree intervalTree; //size of struct is 48 bytes, where 3 are wasted
+
+//LEGEND: red node: skips > 0, black node: skips < 0.
 
 
 void printInorderTrasversal(intervalTree *node);
@@ -27,7 +32,7 @@ void redBlackTreeLeftRotate(intervalTree *x);
 void redBlackTreeRightRotate(intervalTree *y);
 void insertInterval(int a, int b);
 intervalTree* searchInterval(int a, int b);
-void redBlackTransplant(intervalTree *u, intervalTree *v);
+void redBlackTransplant(intervalTree *source, intervalTree *substitute);
 intervalTree* getParent(intervalTree *node);
 intervalTree* getSibling(intervalTree *node);
 void redBlackTreeRemovalFixup2(intervalTree* node);
@@ -36,7 +41,135 @@ void deleteNode(intervalTree *node);
 void showTreeStructure(intervalTree* node);
 void adjustParameters(intervalTree* element);
 
+void assignColor(char color, intervalTree* dest);
+void copyColor(intervalTree* source, intervalTree* dest);
+bool isRed(intervalTree* node);
+bool isBlack(intervalTree* node);
+int abs(int value);
+int lookup(int key);
+
+
 intervalTree *tree; //global variable that stores the entire tree structure, pointer to the root node
+
+
+int main() { //this implementation uses global variable tree to access its values
+	printf("size of intervalTree is %d bytes\n", (int) sizeof(intervalTree));
+
+	/*
+	insertInterval(5, 6);
+	insertInterval(10, 12);
+	insertInterval(45, 46);
+	insertInterval(44, 48);
+	insertInterval(43, 49);
+	insertInterval(15, 18);
+	insertInterval(14, 19);
+	insertInterval(13, 20);
+	insertInterval(23, 25);
+	insertInterval(42, 52);
+	insertInterval(53, 54);
+	insertInterval(35, 38);
+	insertInterval(62, 65);
+	insertInterval(66, 67);
+	insertInterval(1, 3);
+	insertInterval(40, 55);
+	insertInterval(56, 58);
+	insertInterval(26, 29);
+	insertInterval(21, 60);
+	insertInterval(8, 9);
+	insertInterval(81,84);
+	insertInterval(78, 79);
+*/
+
+	insertInterval(13, 15);
+	insertInterval(20, 23);
+	insertInterval(27, 28);
+	insertInterval(31, 33);
+	insertInterval(73, 74);
+	insertInterval(77, 78);
+	insertInterval(80, 82);
+	insertInterval(36, 39);
+	insertInterval(43, 44);
+	insertInterval(50, 50);
+	insertInterval(55, 57);
+	insertInterval(29, 34);
+	insertInterval(63, 64);
+	insertInterval(62, 67);
+	insertInterval(60, 70);
+	insertInterval(72, 85);
+
+	printf("in-order Traversal:\n");
+	printInorderTrasversal(tree);
+	printf("\n");
+	showTreeStructure(tree);
+
+	int key = 40;
+	printf("lookup %d = %d\n", key, lookup(key));
+
+	return 0;
+}
+
+//calculates the exact row where a line = key is stored
+int lookup(int key) {
+	intervalTree *node = tree;
+	intervalTree *match = NULL; //save in memory the node which skips value is the closest as possible to the key, but greater than the key
+
+	while (node != NULL) {
+		if (key > node->skips) { //goes to the right subtree
+			if ((node->skips > key && match == NULL) || (node->skips > key && node->skips < match->skips)) {
+				match = node; //match update
+			}
+			if (node->right == NULL) {
+				if (match == NULL) { //rightmost node has a different calculation
+					return node->highEndpoint + key - node->skips;
+				}
+				break; //stops the while cycle since it found the correct node
+			} else {
+				node = node->right; //goes to the right subtree
+			}
+
+		} else if (key < node->skips) { //goes to the left subtree
+			if ((match == NULL && node->skips > key) || (node->skips > key && node->skips < match->skips)) {
+				match = node; //match update
+			}
+			if (node->left == NULL) {
+				break; //stops the while cycle since it found the correct node
+			} else {
+				node = node->left;
+			}
+		} else if (key == node->skips) { //found exact key in one of the nodes
+			return node->lowEndpoint - 1; //is it correct though?
+		}
+
+	}
+
+	if (match != NULL) { //should be match
+		printf("node chosen is <%d,%d,%d>\n", match->a, match->b, match->skips);
+		return match->lowEndpoint - 1 - match->skips + key; //is it correct though?
+	}
+	return 0; //must be never called
+}
+/*
+int getAfromNode(intervalTree* root) {
+	//TODO: this function finds the value a corresponding to the node which has its abs(highEndpoint)
+	int extra = abs(root->highEndpoint);
+	if (root->b == extra) {
+		return root->a;
+	} else if (root->left != NULL) {
+		root = root->left;
+	}
+	while (root->b != extra) {
+		if (root->right != NULL) {
+			root = root->right;
+		} else if (root->left != NULL) {
+			root = root->left;
+		}
+	}
+	if (root->b == extra) {
+		return root->a;
+	}
+	//it should work I guess
+}
+*/
 
 // Left Rotation procedure for maintaining the balance property for the trees
 void redBlackTreeLeftRotate(intervalTree *x) {
@@ -92,13 +225,13 @@ void redBlackTreeRightRotate(intervalTree *y) {
 //this utility function fixes the structure of the tree so that after the insertion, continues to satisfy the rbt property
 void redBlackTreeInsertionFixup(intervalTree* node) {
 	if (getParent(node) == NULL) {
-		node->color = 'B';
-	} else if (getParent(node)->color == 'B') {
+		assignColor('B', node);
+	} else if (isBlack(getParent(node))) {
 		return;
-	} else if (getSibling(getParent(node)) != NULL && getSibling(getParent(node))->color == 'R') {
-		getParent(node)->color = 'B';
-		(getSibling(getParent(node)))->color = 'B';
-		(getParent(getParent(node)))->color = 'R';
+	} else if (getSibling(getParent(node)) != NULL && isRed(getSibling(getParent(node)))) {
+		assignColor('B', node);
+		assignColor('B', getSibling(getParent(node)));
+		assignColor('R', getParent(getParent(node)));
 		redBlackTreeInsertionFixup(getParent(getParent(node)));
 	} else {
 		intervalTree* p = getParent(node);
@@ -116,34 +249,36 @@ void redBlackTreeInsertionFixup(intervalTree* node) {
 		g = getParent(getParent(node));
 
 		if (node == p->left) {
-			p->color = 'B';
-			g->color = 'R';
+			assignColor('B', p);
+			assignColor('R', g);
 			redBlackTreeRightRotate(g);
 		} else if (node == p->right){
-			p->color = 'B';
-			g->color = 'R';
+			assignColor('B', p);
+			assignColor('R', g);
 			redBlackTreeLeftRotate(g);
 		}
 
 	}
 }
 
-// Utility function to insertInterval newly node in RedBlack tree
+// Utility function to insert a new node in RedBlack tree, after a delete call
 void insertInterval(int a, int b) {
-	// Allocate memory for new node
+	// Allocates memory for new node (48 bytes)
 	intervalTree *newNode = (intervalTree*) malloc(sizeof(intervalTree));
 	newNode->left = NULL;
 	newNode->right = NULL;
 	newNode->parent = NULL;
 	newNode->a = a;
 	newNode->b = b;
-	newNode->sum = b - a + 1;
-	newNode->extra = b;
+	newNode->skips = a - 1;
+	newNode->highEndpoint = b;
+	newNode->lowEndpoint = a;
 
 	intervalTree *y = NULL;
 	intervalTree *x = tree;
 
 	//follows standard BST procedure to insert the node in the right place
+	//bigger overlapping intervals are put before the smaller ones which are included by the bigger one
 	while (x != NULL) {
 		y = x;
 		if (newNode->b < x->a || (newNode->a < x->a && newNode->b > x->b)) {
@@ -162,7 +297,7 @@ void insertInterval(int a, int b) {
 		y->right = newNode;
 	}
 
-	newNode->color = 'R';
+	assignColor('R', newNode);
 	// call insertFixUp to fix reb-black tree's property if it is violated due to insertion.
 	redBlackTreeInsertionFixup(newNode);
 	// Find the new root
@@ -176,9 +311,9 @@ void insertInterval(int a, int b) {
 }
 
 //displays the tree structure with the form: node value, left subtree, right subtree, for every node in the tree
-void showTreeStructure(intervalTree* node) {
+void showTreeStructure(intervalTree* node) { //used for debugging the tree structure and check if it's balanced
 	if (node != NULL) {
-		printf("node<%d,%d>: ", node->a, node->b);
+		printf("node<%d,%d,%d>: ", node->a, node->b, node->skips);
 		if (node->left != NULL) {
 			printf("sx:<%d,%d> ", node->left->a, node->left->b);
 		} else {
@@ -200,16 +335,16 @@ void showTreeStructure(intervalTree* node) {
 // A utility function to traverse Red-Black tree in in-order fashion (from the minimum value to the max value)
 void printInorderTrasversal(intervalTree *node) {
 	if (node == NULL) return;
-	//format for the node's description is <a,b,sum,extra>
+	//format for the node's description is <a,b,skips,lowEndpoint,highEndpoint>
 	printInorderTrasversal(node->left);
-	printf("<%d,%d,%d,%d> - ", node->a, node->b, node->sum, node->extra);
+	printf("<%d,%d,%d,%d,%d> - ", node->a, node->b, node->skips, node->lowEndpoint, node->highEndpoint);
 	printInorderTrasversal(node->right);
 }
 // A utility function to traverse Red-Black tree in pre-order fashion (parent --> left child --> right child)
 void printPreorderTrasversal(intervalTree* node) {
 	if (node == NULL) return;
-
-	printf("<%d,%d,%d> - ", node->a, node->b, node->sum); //prints data of the node
+	//format for the node's description is <a,b,skips,lowEndpoint,highEndpoint>
+	printf("<%d,%d,%d,%d,%d> - ", node->a, node->b, node->skips, node->lowEndpoint, node->highEndpoint); //prints data of the node
 	printPreorderTrasversal(node->left); // then recur on left subtree
 	printPreorderTrasversal(node->right); // now recur on right subtree
 }
@@ -258,23 +393,25 @@ intervalTree* rightmostNode(intervalTree* node) {
 	return current;
 }
 
-bool isRed(int sum) { //returns false if the node is black, true if it's red
-	if (sum < 0) {
+bool isRed(intervalTree* node) { //returns false if the node is black, true if it's red
+	if (node->color == 'R') return true; else return false;
+	/*if (node->highEndpoint < 0) {
 		return false; //black node
-	} else if (sum > 0) {
+	} else if (node->highEndpoint > 0) {
 		return true; //red node
 	} else {
-		return NULL; //never happens since the sum can't be == 0
-	}
+		return NULL; //never happens since the skips can't be == 0
+	}*/
 }
-bool isBlack(int sum) { //returns false if the node is black, true if it's red
-	if (sum < 0) {
+bool isBlack(intervalTree* node) { //returns false if the node is black, true if it's red
+	if (node->color == 'B') return true; else return false;
+	/*if (node->highEndpoint < 0) {
 		return true; //black node
-	} else if (sum > 0) {
+	} else if (node->highEndpoint > 0) {
 		return false; //red node
 	} else {
-		return NULL; //never happens since the sum can't be == 0
-	}
+		return NULL; //never happens since the skips can't be == 0
+	}*/
 }
 int abs(int value) { //return absolute integer value of an input value
 	if (value < 0) {
@@ -282,80 +419,62 @@ int abs(int value) { //return absolute integer value of an input value
 	} else return value;
 }
 void copyColor(intervalTree* source, intervalTree* dest) {
-	if ((source->sum > 0 && dest->sum < 0) || (source->sum < 0 && dest->sum > 0)) {
-		dest->sum = -dest->sum; //change color in the case the two nodes have different colors
+	dest->color = source->color;
+	/*
+	if ((source->highEndpoint > 0 && dest->highEndpoint < 0) || (source->highEndpoint < 0 && dest->highEndpoint > 0)) {
+		dest->highEndpoint = -dest->highEndpoint; //change color in the case the two nodes have different colors
 	}
+	 */
 }
 void assignColor(char color, intervalTree* dest) {
+	dest->color = color;
+	/*
 	if (color == 'R') {
-		if (dest->sum < 0) {
-			dest->sum = - dest->sum;
+		if (dest->highEndpoint < 0) {
+			dest->highEndpoint = - dest->highEndpoint;
 		}
 	} else if (color == 'B') {
-		if (dest->sum > 0) {
-			dest->sum = - dest->sum;
+		if (dest->highEndpoint > 0) {
+			dest->highEndpoint = - dest->highEndpoint;
 		}
-	}
+	}*/
 }
 
-//TODO: implement adjust sums procedure from current inserted node, and going right til the right-most leaf
+//modifies the parameters skips and highEndpoint, so the lookup function is faster to execute, since it's the one
+//which is called many more times than the delete rows function
 void adjustParameters(intervalTree* element) {
-	intervalTree *current = inOrderPreviousNode(element);
-	if (current!= NULL && current->extra < element->a) {
-		element->sum += current->sum;
+	intervalTree *prev = inOrderPreviousNode(element);
+	//this if statement checks for the number of lines actually present, before the interval considered
+	if (prev != NULL && prev->highEndpoint < element->a) {
+		element->skips = prev->skips + element->a - 1 - prev->highEndpoint;
 	}
-	current = inOrderNextNode(element);
-	int holes = 0;
-	while (current != NULL && current->b < element->extra) {
-		current->extra = element->extra;
-		current->sum = element->sum;
-		holes += (current->b - current->a + 1);
-		current = inOrderNextNode(current);
-	}
-	holes = element-> b - element->a + 1 - holes;
+
+	intervalTree *current = inOrderNextNode(element);
+	prev = element;
+	int elementHigh = element->highEndpoint; //keeps track of the high endpoint of the bigger overlapping interval
+	int elementLow = element->lowEndpoint; //keeps track of the low endpoint of the bigger overlapping interval
+
 	while (current != NULL) {
-		current->sum += holes;
-		current = inOrderNextNode(current);
+		if (current->b < elementHigh && current->a > elementLow) {
+			//iteration through the smaller intervals included in a bigger one
+			//copies the endpoints to make the lookup function faster, while wasting a bit of memory
+			current->highEndpoint = elementHigh;
+			current->lowEndpoint = elementLow;
+			current->skips = element->skips;
+		} else {
+			//calculates the new number of skips
+			current->skips = prev->skips + current->a - 1 - prev->highEndpoint;
+			//updates the new endpoint values based on the intervals that come after
+			elementHigh = current->highEndpoint;
+			elementLow = current->lowEndpoint;
+		}
+		prev = current;
+		current = inOrderNextNode(current); //goes forward and updates the remaining nodes
 	}
 }
 
 
-int main() { //this implementation uses global variable tree to access its values
-	printf("size of intervalTree is %d bytes\n", (int) sizeof(intervalTree));
-
-
-	insertInterval(5, 6);
-	insertInterval(10, 12);
-	insertInterval(45, 46);
-	insertInterval(44, 48);
-	insertInterval(43, 49);
-	insertInterval(15, 18);
-	insertInterval(14, 19);
-	insertInterval(13, 20);
-	insertInterval(23, 25);
-	insertInterval(42, 52);
-	insertInterval(53, 54);
-	insertInterval(35, 38);
-	insertInterval(62, 65);
-	insertInterval(66, 67);
-	insertInterval(1, 3);
-	insertInterval(40, 55);
-	insertInterval(56, 58);
-	insertInterval(26, 29);
-	insertInterval(21, 60);
-	insertInterval(8, 9);
-	insertInterval(70,80);
-	insertInterval(68, 69);
-
-	printf("in-order Traversal:\n");
-	printInorderTrasversal(tree);
-	printf("\n");
-	//showTreeStructure(tree);
-
-	return 0;
-}
-
-//returns the struct pointer to the interval containing the same interval numbers
+//returns the struct pointer to the interval containing the same exact interval numbers
 intervalTree* searchInterval(int a, int b) {
 	intervalTree *x = tree;
 	while (x != NULL && x->a != a && x->b != b) {
@@ -365,23 +484,16 @@ intervalTree* searchInterval(int a, int b) {
 			x = x->right;
 		}
 	}
-	if (x == NULL) {
-		return NULL;
-	} else {
-		return x;
-	}
+	return x; //returns null if the interval is not found
 }
 
-// replace node u with node v
-void redBlackTransplant(intervalTree *u, intervalTree *v){
-	v->parent = u->parent;
-	//if(u->parent == NULL){
-		//tree = v;
-	//} else
-	if(u == u->parent->left){
-		u->parent->left = v;
+// replaces node source with the node substitute
+void redBlackTransplant(intervalTree *source, intervalTree *substitute){
+	substitute->parent = source->parent;
+	if(source == source->parent->left){
+		source->parent->left = substitute;
 	} else {
-		u->parent->right = v;
+		source->parent->right = substitute;
 	}
 }
 
@@ -389,9 +501,9 @@ void redBlackTransplant(intervalTree *u, intervalTree *v){
 void deleteNode(intervalTree *node) {
 	intervalTree *child = NULL;
 	if (node->right == NULL && node->left != NULL) {
-		child = node->left;
+		child = node->left; //one child removal, base case
 	} else if (node->left == NULL && node->right != NULL) {
-		child = node->right;
+		child = node->right; //one child removal, base case
 	} else if (node->left == NULL && node->right == NULL) {
 		//leaf removal (this is my addition)
 		if (node->parent->left == node) {
@@ -402,8 +514,10 @@ void deleteNode(intervalTree *node) {
 		free(node);
 		return;
 	} else if (node->right != NULL && node->left != NULL) {
+		//additional case: removal of a node with 2 children nodes
 		intervalTree *y = inOrderNextNode(node);
-		char y_original_color = y->color;
+		char yOriginalColor = y->color;
+
 		intervalTree *x = y->right;
 		if (x != NULL) {
 			if (y->parent == node) {
@@ -418,9 +532,8 @@ void deleteNode(intervalTree *node) {
 		redBlackTransplant(node, y);
 		y->left = node->left;
 		y->left->parent = y;
-		y->color = node->color;
-
-		if (y_original_color == 'B' && x != NULL){
+		copyColor(node, y);
+		if (yOriginalColor == 'B' && x != NULL){
 			redBlackTreeRemovalFixup1(x);
 		}
 		free(node);
@@ -428,11 +541,11 @@ void deleteNode(intervalTree *node) {
 	}
 
 	redBlackTransplant(node, child);
-	if (node->color == 'B') {
-		if (child->color == 'R') {
-			child->color = 'B';
+	if (isBlack(node)) {
+		if (isRed(child)) {
+			assignColor('B', child);
 		} else {
-			redBlackTreeRemovalFixup1(child);
+			redBlackTreeRemovalFixup1(child); //fixes the tree structure after the deletion of the node
 		}
 	}
 	free(node); //frees the memory for the selected node in a secure way, after fixing the tree structure
@@ -443,9 +556,9 @@ void redBlackTreeRemovalFixup1(intervalTree* node) {
 	if (node->parent != NULL) {
 		intervalTree* stepBro = getSibling(node);
 
-		if (stepBro->color == 'R') {
-			node->parent->color = 'R';
-			stepBro->color = 'B';
+		if (isRed(stepBro)) {
+			assignColor('R', node->parent);
+			assignColor('B', stepBro);
 			if (node == node->parent->left) {
 				redBlackTreeLeftRotate(node->parent);
 			} else {
@@ -459,47 +572,43 @@ void redBlackTreeRemovalFixup1(intervalTree* node) {
 void redBlackTreeRemovalFixup2(intervalTree* node) {
 	intervalTree* stepSis = getSibling(node);
 
-	if ((node->parent->color == 'B') && (stepSis->color == 'B') &&
-		(stepSis->left->color == 'B') && (stepSis->right->color == 'B')) {
-		stepSis->color = 'R';
+	if (isBlack(node->parent) && isBlack(stepSis) && isBlack(stepSis->left) && isBlack(stepSis->right)) {
+		assignColor('R', stepSis);
 		redBlackTreeRemovalFixup1(node->parent);
 	} else {
-		if ((node->parent->color == 'R') && (stepSis->color == 'B') &&
-			(stepSis->left->color == 'B') && (stepSis->right->color == 'B')) {
-			stepSis->color = 'R';
-			node->parent->color = 'B';
+		if (isRed(node->parent) && isBlack(stepSis) && isBlack(stepSis->left) && isBlack(stepSis->right)) {
+			assignColor('R', stepSis);
+			assignColor('B', node->parent);
 		} else {
 			// This if statement is trivial, due to case 2 (even though case 2 changed
 			// the sibling to a sibling's child, the sibling's child can't be red, since
 			// no red parent can have a red child).
-			if (stepSis->color == 'B') {
+			if (isBlack(stepSis)) {
 				// The following statements just force the red to be on the left of the
 				// left of the parent, or right of the right, so case six will rotate
 				// correctly.
-				if ((node == node->parent->left) && (stepSis->right->color == 'B') &&
-					(stepSis->left->color == 'R')) {
+				if ((node == node->parent->left) && isBlack(stepSis->right) && isRed(stepSis->left)) {
 					// This last test is trivial too due to cases 2-4.
-					stepSis->color = 'R';
-					stepSis->left->color = 'B';
+					assignColor('R', stepSis);
+					assignColor('B', stepSis->left);
 					redBlackTreeRightRotate(stepSis);
-				} else if ((node == node->parent->right) && (stepSis->left->color == 'B') &&
-						   (stepSis->right->color == 'R')) {
+				} else if ((node == node->parent->right) && isBlack(stepSis->left) && isRed(stepSis->right)) {
 					// This last test is trivial too due to cases 2-4.
-					stepSis->color = 'R';
-					stepSis->right->color = 'B';
+					assignColor('R', stepSis);
+					assignColor('B', stepSis->right);
 					redBlackTreeLeftRotate(stepSis);
 				}
 			}
 			stepSis = getSibling(node);
 
-			stepSis->color = node->parent->color;
-			node->parent->color = 'B';
+			copyColor(node->parent, stepSis);
+			assignColor('B', node->parent);
 
 			if (node == node->parent->left) {
-				stepSis->right->color = 'B';
+				assignColor('B', stepSis->right);
 				redBlackTreeLeftRotate(node->parent);
 			} else {
-				stepSis->left->color = 'B';
+				assignColor('B', stepSis->left);
 				redBlackTreeRightRotate(node->parent);
 			}
 		}

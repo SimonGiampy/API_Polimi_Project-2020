@@ -20,18 +20,17 @@ struct intervalTree {
 typedef struct intervalTree intervalTree; //size of struct is 48 bytes, where 3 are wasted
 //LEGEND used for storing char inside an integer: red node: skips > 0, black node: skips < 0.
 
-struct quickLook {
+struct quickLook { //linked list for the quick access intervals
 	intervalTree *piece;
 	struct quickLook *next;
 };
 struct quickLookupsHead { //stack of type FILO (first in, last out) for keeping track of last accessed intervals
 	struct quickLook *head; //pointer to the first element
-	struct quickLook *end; //pointer to the last element
+	struct quickLook *end; //pointer to the last element, TODO: this is probably not needed, since it is never accessed
 	int capacity; //can be set by default to 10
 	int occupied;
 };
 struct quickLookupsHead *quickLookupsHead;
-
 
 
 void printInorderTrasversal(intervalTree *node);
@@ -52,15 +51,13 @@ void redBlackTreeRemovalFixup1(intervalTree* node);
 void deleteNode(intervalTree *node);
 void showTreeStructure(intervalTree* node);
 void adjustParametersAfterInsertion(intervalTree* element);
-void adjustParametersAfterDeletion(intervalTree* node);
+void adjustParametersAfterDeletion(intervalTree* node, int low, int high);
 
 void assignColor(char color, intervalTree* dest);
 void copyColor(intervalTree* source, intervalTree* dest);
 bool isRed(intervalTree* node);
 bool isBlack(intervalTree* node);
-int abs(int value);
 int lookup(int key);
-
 void addIntervalForQuickLookups(intervalTree* node);
 int quickLookup(int key);
 void debugQuickLookups();
@@ -105,47 +102,33 @@ int main() { //this implementation uses global variable tree to access its value
 	insertInterval(20, 23);
 	insertInterval(27, 28);
 	insertInterval(31, 33);
-	insertInterval(73, 74);
+	insertInterval(75, 75);
 	insertInterval(77, 78);
-	insertInterval(80, 82);
+	insertInterval(83, 85);
+	insertInterval(74, 76);
 	insertInterval(36, 39);
 	insertInterval(43, 44);
 	insertInterval(50, 50);
 	insertInterval(55, 57);
+	insertInterval(90, 91);
 	insertInterval(29, 34);
 	insertInterval(63, 64);
+	insertInterval(87, 93);
 	insertInterval(62, 67);
 	insertInterval(60, 70);
-	insertInterval(72, 85);
+	insertInterval(73, 80);
+	insertInterval(72, 95);
+	insertInterval(100, 120);
 
 	printf("in-order Traversal:\n");
 	printInorderTrasversal(tree);
 	printf("\n");
 	//showTreeStructure(tree);
-	//TODO: make new function to adjust parameters after deletion of an element and check its correctness
 
-	int key = 24;
-	printf("lookup %d = %d\n", key, quickLookup(key));
-	debugQuickLookups();
-	key = 33;
-	printf("lookup %d = %d\n", key, quickLookup(key));
-	debugQuickLookups();
-	key = 10;
-	printf("lookup %d = %d\n", key, quickLookup(key));
-	debugQuickLookups();
-	key = 60;
-	printf("lookup %d = %d\n", key, quickLookup(key));
-	debugQuickLookups();
-	key = 26;
-	printf("lookup %d = %d\n", key, quickLookup(key));
-	debugQuickLookups();
-	key = 19;
-	printf("lookup %d = %d\n", key, quickLookup(key));
-	debugQuickLookups();
-	key = 9;
-	printf("lookup %d = %d\n", key, quickLookup(key));
-	debugQuickLookups();
-
+	deleteNode(searchInterval(72, 95));
+	printf("in-order Traversal:\n");
+	printInorderTrasversal(tree);
+	printf("\n");
 	return 0;
 }
 
@@ -263,15 +246,15 @@ void addIntervalForQuickLookups(intervalTree* node) {
 			//insert new node at the head and frees the last element in the linked list
 			struct quickLook *tmp = current;
 			short counter = 1;
-			while (counter < quickLookupsHead->capacity) { //scrolls the list till the element before the last one
+			while (counter < quickLookupsHead->capacity) { //scrolls the list until it reaches the element before the last one
 				tmp = tmp->next;
 				counter++;
 			}
 			free(tmp->next); //deletes the last element when the occupied size is greater than the capacity
-			tmp->next = NULL;
+			tmp->next = NULL; //last element has a null next pointer
 			quickLookupsHead->end = tmp; //adjust the end pointer, by scrolling the list
 		} else if (quickLookupsHead->occupied < quickLookupsHead->capacity) {
-			quickLookupsHead->occupied += 1; //decrease or increase
+			quickLookupsHead->occupied += 1; //increase if the stack isn't full yet
 		}
 	}
 }
@@ -520,39 +503,12 @@ bool isRed(intervalTree* node) { //returns false if the node is black, true if i
 }
 bool isBlack(intervalTree* node) { //returns false if the node is black, true if it's red
 	if (node->color == 'B') return true; else return false;
-	/*if (node->highEndpoint < 0) {
-		return true; //black node
-	} else if (node->highEndpoint > 0) {
-		return false; //red node
-	} else {
-		return NULL; //never happens since the skips can't be == 0
-	}*/
-}
-int abs(int value) { //return absolute integer value of an input value
-	if (value < 0) {
-		return -value;
-	} else return value;
 }
 void copyColor(intervalTree* source, intervalTree* dest) {
 	dest->color = source->color;
-	/*
-	if ((source->highEndpoint > 0 && dest->highEndpoint < 0) || (source->highEndpoint < 0 && dest->highEndpoint > 0)) {
-		dest->highEndpoint = -dest->highEndpoint; //change color in the case the two nodes have different colors
-	}
-	 */
 }
 void assignColor(char color, intervalTree* dest) {
 	dest->color = color;
-	/*
-	if (color == 'R') {
-		if (dest->highEndpoint < 0) {
-			dest->highEndpoint = - dest->highEndpoint;
-		}
-	} else if (color == 'B') {
-		if (dest->highEndpoint > 0) {
-			dest->highEndpoint = - dest->highEndpoint;
-		}
-	}*/
 }
 
 //modifies the parameters skips and highEndpoint, so the lookup function is faster to execute, since it's the one
@@ -588,9 +544,46 @@ void adjustParametersAfterInsertion(intervalTree* element) {
 	}
 }
 
-void adjustParametersAfterDeletion(intervalTree* node) {
-	//node should be the node that is situated before the deleted node
-	//so it cycles forward the in order list of elements and updates the values
+void adjustParametersAfterDeletion(intervalTree* node, int low, int high) {
+	//the selected node is situated just before the deleted node
+	int number; //= number of deleted elements
+
+	intervalTree *current = node;
+	int elementHigh = current->b; //keeps track of the high endpoint of the bigger overlapping interval
+	int elementLow = current->a; //keeps track of the low endpoint of the bigger overlapping interval
+
+	if (high == current->highEndpoint && low == current->lowEndpoint) {
+		//there are sub-intervals
+		number = node->a - low;
+		while (current != NULL && current->b < high && current->a > low) {
+			if (current->a > elementLow && current->b < elementHigh) { //smaller sub-intervals
+				current->lowEndpoint = elementLow;
+				current->highEndpoint = elementHigh;
+			} else { //new big sub-interval
+				if (current != node) {
+					number += current->a - elementHigh - 1; //new offset between two smaller intervals
+				}
+				current->lowEndpoint = current->a;
+				current->highEndpoint = current->b;
+				elementLow = current->a;
+				elementHigh = current->b;
+			}
+			current->skips += number;
+			current = inOrderNextNode(current);
+		}
+		if (current != NULL) { //other nodes to examine
+			number += high - elementHigh; //after last element add more index
+		}
+
+	} else {
+		//skips updated of a length = high - low + 1 for every interval in the tree
+		number = high - low + 1;
+	}
+
+	while (current != NULL) { //updates the values which come after the last overlapped interval
+		current->skips += number;
+		current = inOrderNextNode(current);
+	}
 }
 
 
@@ -620,6 +613,8 @@ void redBlackTransplant(intervalTree *source, intervalTree *substitute){
 //deletes a node, given as input the specific node pointer to delete
 void deleteNode(intervalTree *node) {
 	intervalTree *child = NULL;
+	intervalTree *savedNode = inOrderNextNode(node); //this is needed to correct the parameters after a delete
+	int deletedNodeLowEnd = node->lowEndpoint, deletedNodeHighEnd = node->highEndpoint;
 	if (node->right == NULL && node->left != NULL) {
 		child = node->left; //one child removal, base case
 	} else if (node->left == NULL && node->right != NULL) {
@@ -632,6 +627,7 @@ void deleteNode(intervalTree *node) {
 			node->parent->right = NULL;
 		}
 		free(node);
+		adjustParametersAfterDeletion(savedNode, deletedNodeLowEnd, deletedNodeHighEnd); //fixes the structure with its parameters
 		return;
 	} else if (node->right != NULL && node->left != NULL) {
 		//additional case: removal of a node with 2 children nodes
@@ -657,6 +653,7 @@ void deleteNode(intervalTree *node) {
 			redBlackTreeRemovalFixup1(x);
 		}
 		free(node);
+		adjustParametersAfterDeletion(savedNode, deletedNodeLowEnd, deletedNodeHighEnd); //fixes the structure with its parameters
 		return;
 	}
 
@@ -669,6 +666,7 @@ void deleteNode(intervalTree *node) {
 		}
 	}
 	free(node); //frees the memory for the selected node in a secure way, after fixing the tree structure
+	adjustParametersAfterDeletion(savedNode, deletedNodeLowEnd, deletedNodeHighEnd); //fixes the structure with its parameters
 }
 
 //these utilities serve for fixing the red-black tree structure and colors

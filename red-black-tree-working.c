@@ -1,6 +1,6 @@
 //
 // Created by simon on 07/08/20.
-//
+// Pointers are like integrals: they require a lot of time and practice in order to be fully mastered
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
@@ -18,8 +18,20 @@ struct intervalTree {
 	char color; //can be 'R' or 'B' if the node is red or black
 };
 typedef struct intervalTree intervalTree; //size of struct is 48 bytes, where 3 are wasted
+//LEGEND used for storing char inside an integer: red node: skips > 0, black node: skips < 0.
 
-//LEGEND: red node: skips > 0, black node: skips < 0.
+struct quickLook {
+	intervalTree *piece;
+	struct quickLook *next;
+};
+struct quickLookupsHead { //stack of type FILO (first in, last out) for keeping track of last accessed intervals
+	struct quickLook *head; //pointer to the first element
+	struct quickLook *end; //pointer to the last element
+	int capacity; //can be set by default to 10
+	int occupied;
+};
+struct quickLookupsHead *quickLookupsHead;
+
 
 
 void printInorderTrasversal(intervalTree *node);
@@ -39,7 +51,8 @@ void redBlackTreeRemovalFixup2(intervalTree* node);
 void redBlackTreeRemovalFixup1(intervalTree* node);
 void deleteNode(intervalTree *node);
 void showTreeStructure(intervalTree* node);
-void adjustParameters(intervalTree* element);
+void adjustParametersAfterInsertion(intervalTree* element);
+void adjustParametersAfterDeletion(intervalTree* node);
 
 void assignColor(char color, intervalTree* dest);
 void copyColor(intervalTree* source, intervalTree* dest);
@@ -48,12 +61,20 @@ bool isBlack(intervalTree* node);
 int abs(int value);
 int lookup(int key);
 
+void addIntervalForQuickLookups(intervalTree* node);
+int quickLookup(int key);
+void debugQuickLookups();
 
 intervalTree *tree; //global variable that stores the entire tree structure, pointer to the root node
 
 
 int main() { //this implementation uses global variable tree to access its values
 	printf("size of intervalTree is %d bytes\n", (int) sizeof(intervalTree));
+
+	//initialization of quicklookups structure
+	quickLookupsHead = (struct quickLookupsHead*) malloc(sizeof(struct quickLookupsHead));
+	quickLookupsHead->capacity = 4; //just for testing a limited amount of intervals
+	quickLookupsHead->occupied = 0;
 
 	/*
 	insertInterval(5, 6);
@@ -100,10 +121,30 @@ int main() { //this implementation uses global variable tree to access its value
 	printf("in-order Traversal:\n");
 	printInorderTrasversal(tree);
 	printf("\n");
-	showTreeStructure(tree);
+	//showTreeStructure(tree);
+	//TODO: make new function to adjust parameters after deletion of an element and check its correctness
 
-	int key = 40;
-	printf("lookup %d = %d\n", key, lookup(key));
+	int key = 24;
+	printf("lookup %d = %d\n", key, quickLookup(key));
+	debugQuickLookups();
+	key = 33;
+	printf("lookup %d = %d\n", key, quickLookup(key));
+	debugQuickLookups();
+	key = 10;
+	printf("lookup %d = %d\n", key, quickLookup(key));
+	debugQuickLookups();
+	key = 60;
+	printf("lookup %d = %d\n", key, quickLookup(key));
+	debugQuickLookups();
+	key = 26;
+	printf("lookup %d = %d\n", key, quickLookup(key));
+	debugQuickLookups();
+	key = 19;
+	printf("lookup %d = %d\n", key, quickLookup(key));
+	debugQuickLookups();
+	key = 9;
+	printf("lookup %d = %d\n", key, quickLookup(key));
+	debugQuickLookups();
 
 	return 0;
 }
@@ -119,7 +160,9 @@ int lookup(int key) {
 				match = node; //match update
 			}
 			if (node->right == NULL) {
-				if (match == NULL) { //rightmost node has a different calculation
+				if (match == NULL) { //the rightmost node in the tree has a different index calculation
+					addIntervalForQuickLookups(node);
+					printf("node chosen is <%d,%d,%d>\n", node->a, node->b, node->skips);
 					return node->highEndpoint + key - node->skips;
 				}
 				break; //stops the while cycle since it found the correct node
@@ -137,39 +180,111 @@ int lookup(int key) {
 				node = node->left;
 			}
 		} else if (key == node->skips) { //found exact key in one of the nodes
-			return node->lowEndpoint - 1; //is it correct though?
+			//addIntervalForQuickLookups(node); //this particular case in not necessary since the key is exactly equal
+			//and the probability of it being found again is very low
+			printf("node chosen is <%d,%d,%d>\n", node->a, node->b, node->skips);
+			return node->lowEndpoint - 1;
 		}
 
 	}
 
 	if (match != NULL) { //should be match
+		//insert debug flag here or delete the printf statement
 		printf("node chosen is <%d,%d,%d>\n", match->a, match->b, match->skips);
+		addIntervalForQuickLookups(match);
 		return match->lowEndpoint - 1 - match->skips + key; //is it correct though?
 	}
 	return 0; //must be never called
 }
-/*
-int getAfromNode(intervalTree* root) {
-	//TODO: this function finds the value a corresponding to the node which has its abs(highEndpoint)
-	int extra = abs(root->highEndpoint);
-	if (root->b == extra) {
-		return root->a;
-	} else if (root->left != NULL) {
-		root = root->left;
+//iterates through the linked list of intervals, and tries to find a match for the calculation of the index
+int quickLookup(int key) {
+	struct quickLook *current = quickLookupsHead->head; //current must be != NULL from the start
+	intervalTree *comparison; //used for comparison with a certain interval in the list
+	struct quickLook *prev = NULL; //prev must be automatically != NULL when counter > 1
+	int counter = 0; //counts the number of nodes which have been examined
+
+	while (current != NULL) {
+		comparison = inOrderPreviousNode(current->piece); //needed to check if the interval is the correct one
+		counter++;
+
+		if (inOrderNextNode(current->piece) == NULL) {
+			//this is the rightmost node
+			if (key > current->piece->skips) { //rightmost node is a valid interval
+				if (counter > 1 && prev != NULL) {
+					//moves current node to the head to make access faster
+					prev->next = current->next;
+					current->next = quickLookupsHead->head;
+					quickLookupsHead->head = current;
+				}
+				return current->piece->highEndpoint + key - current->piece->skips;
+			}
+		} else if (comparison == NULL) { //leftmost node found
+			if (current->piece->skips >= key) {
+				if (counter > 1 && prev != NULL) {
+					//moves current node to the head to make access faster
+					prev->next = current->next;
+					current->next = quickLookupsHead->head;
+					quickLookupsHead->head = current;
+				}
+				return current->piece->lowEndpoint - 1 - current->piece->skips + key;
+			}
+		} else if (current->piece->skips >= key && comparison->skips < key) { //comparison is != NULL
+			//valid interval chosen, which is between 2 intervals
+			if (counter > 1 && prev != NULL) {
+				//moves current node to the head to make access faster
+				prev->next = current->next;
+				current->next = quickLookupsHead->head;
+				quickLookupsHead->head = current;
+			}
+			return current->piece->lowEndpoint - 1 - current->piece->skips + key;
+		}
+		//continues the execution since a valid interval is not found
+		prev = current;
+		current = current->next;
 	}
-	while (root->b != extra) {
-		if (root->right != NULL) {
-			root = root->right;
-		} else if (root->left != NULL) {
-			root = root->left;
+
+	return lookup(key); //called only if the necessary node is not stored in the quick lookup structure
+}
+
+//this is a quicker method for finding the correct interval for the calculation of the correct indexes
+//adds an interval for a quick access, in case the interval is not present already
+void addIntervalForQuickLookups(intervalTree* node) {
+	struct quickLook *current = (struct quickLook*) malloc(sizeof(struct quickLook));
+	current->piece = node;
+	if (quickLookupsHead->head == NULL) { //first element inserted and created
+		current->next = NULL;
+		quickLookupsHead->occupied = 1;
+		quickLookupsHead->head = current;
+		quickLookupsHead->end = current;
+	} else {
+		current->next = quickLookupsHead->head;
+		quickLookupsHead->head = current;
+		if (quickLookupsHead->occupied == quickLookupsHead->capacity ) {
+			//insert new node at the head and frees the last element in the linked list
+			struct quickLook *tmp = current;
+			short counter = 1;
+			while (counter < quickLookupsHead->capacity) { //scrolls the list till the element before the last one
+				tmp = tmp->next;
+				counter++;
+			}
+			free(tmp->next); //deletes the last element when the occupied size is greater than the capacity
+			tmp->next = NULL;
+			quickLookupsHead->end = tmp; //adjust the end pointer, by scrolling the list
+		} else if (quickLookupsHead->occupied < quickLookupsHead->capacity) {
+			quickLookupsHead->occupied += 1; //decrease or increase
 		}
 	}
-	if (root->b == extra) {
-		return root->a;
-	}
-	//it should work I guess
 }
-*/
+
+void debugQuickLookups() {
+	struct quickLook *current = quickLookupsHead->head;
+	printf("showing the list of quick lookups: ");
+	while (current != NULL) {
+		printf("<%d,%d,%d> - ", current->piece->a, current->piece->b, current->piece->skips);
+		current = current->next;
+	}
+	printf("\n");
+}
 
 // Left Rotation procedure for maintaining the balance property for the trees
 void redBlackTreeLeftRotate(intervalTree *x) {
@@ -307,7 +422,7 @@ void insertInterval(int a, int b) {
 	}
 	tree = newRoot;
 
-	adjustParameters(newNode);
+	adjustParametersAfterInsertion(newNode);
 }
 
 //displays the tree structure with the form: node value, left subtree, right subtree, for every node in the tree
@@ -442,7 +557,7 @@ void assignColor(char color, intervalTree* dest) {
 
 //modifies the parameters skips and highEndpoint, so the lookup function is faster to execute, since it's the one
 //which is called many more times than the delete rows function
-void adjustParameters(intervalTree* element) {
+void adjustParametersAfterInsertion(intervalTree* element) {
 	intervalTree *prev = inOrderPreviousNode(element);
 	//this if statement checks for the number of lines actually present, before the interval considered
 	if (prev != NULL && prev->highEndpoint < element->a) {
@@ -471,6 +586,11 @@ void adjustParameters(intervalTree* element) {
 		prev = current;
 		current = inOrderNextNode(current); //goes forward and updates the remaining nodes
 	}
+}
+
+void adjustParametersAfterDeletion(intervalTree* node) {
+	//node should be the node that is situated before the deleted node
+	//so it cycles forward the in order list of elements and updates the values
 }
 
 

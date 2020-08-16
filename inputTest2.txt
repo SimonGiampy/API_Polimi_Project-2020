@@ -24,32 +24,32 @@ eighteenth
 6,8d
 3,4d
 1,5c
-prima
-seconda
-terza
-quarta
-quinta
+new first
+new second
+new third
+new fourth
+new fifth
 .
 2,2d
 7,10c
-new one
-new two
-new three
-new four
+new 7
+new 8
+new 9
+new 10
 .
 11,15c
-dio
-lama
-donna
-sesso
-quindici
+giovanni
+gioseph
+gionni
+giolly
+giolitti
 .
 16,20c
-this is just modified
-this one too
-this one is caused by the increase of the size of linepointers
-this one as well
-ecchista puru
+sedici
+diciassette
+diciotto
+diciannove
+venti
 .
 16,18d
 1,3d
@@ -61,7 +61,7 @@ ecchista puru
 18
 19
 20
-ventuuuuuno
+21
 22
 23
 24

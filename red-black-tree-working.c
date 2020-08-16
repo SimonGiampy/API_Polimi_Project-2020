@@ -64,7 +64,7 @@ void debugQuickLookups();
 
 intervalTree *tree; //global variable that stores the entire tree structure, pointer to the root node
 
-
+/*
 int main() { //this implementation uses global variable tree to access its values
 	printf("size of intervalTree is %d bytes\n", (int) sizeof(intervalTree));
 
@@ -96,7 +96,7 @@ int main() { //this implementation uses global variable tree to access its value
 	insertInterval(8, 9);
 	insertInterval(81,84);
 	insertInterval(78, 79);
-*/
+
 
 	insertInterval(13, 15);
 	insertInterval(20, 23);
@@ -129,12 +129,19 @@ int main() { //this implementation uses global variable tree to access its value
 	printf("in-order Traversal:\n");
 	printInorderTrasversal(tree);
 	printf("\n");
+
 	return 0;
 }
+*/
 
 //calculates the exact row where a line = key is stored
 int lookup(int key) {
 	intervalTree *node = tree;
+
+	if (tree == NULL) { //when no deletions occurred the tree is empty
+		return key;
+	}
+
 	intervalTree *match = NULL; //save in memory the node which skips value is the closest as possible to the key, but greater than the key
 
 	while (node != NULL) {
@@ -145,7 +152,7 @@ int lookup(int key) {
 			if (node->right == NULL) {
 				if (match == NULL) { //the rightmost node in the tree has a different index calculation
 					addIntervalForQuickLookups(node);
-					printf("node chosen is <%d,%d,%d>\n", node->a, node->b, node->skips);
+					//printf("node chosen is <%d,%d,%d>\n", node->a, node->b, node->skips);
 					return node->highEndpoint + key - node->skips;
 				}
 				break; //stops the while cycle since it found the correct node
@@ -163,17 +170,20 @@ int lookup(int key) {
 				node = node->left;
 			}
 		} else if (key == node->skips) { //found exact key in one of the nodes
-			//addIntervalForQuickLookups(node); //this particular case in not necessary since the key is exactly equal
 			//and the probability of it being found again is very low
-			printf("node chosen is <%d,%d,%d>\n", node->a, node->b, node->skips);
-			return node->lowEndpoint - 1;
+			//printf("node chosen is <%d,%d,%d>\n", node->a, node->b, node->skips);
+			intervalTree *prev = node;
+			while (node != NULL && node->skips == key) {
+				prev = node;
+				node = inOrderPreviousNode(node);
+			}
+			return prev->lowEndpoint - 1;
 		}
 
 	}
 
 	if (match != NULL) { //should be match
-		//insert debug flag here or delete the printf statement
-		printf("node chosen is <%d,%d,%d>\n", match->a, match->b, match->skips);
+		//printf("node chosen is <%d,%d,%d>\n", match->a, match->b, match->skips);
 		addIntervalForQuickLookups(match);
 		return match->lowEndpoint - 1 - match->skips + key; //is it correct though?
 	}
@@ -493,13 +503,6 @@ intervalTree* rightmostNode(intervalTree* node) {
 
 bool isRed(intervalTree* node) { //returns false if the node is black, true if it's red
 	if (node->color == 'R') return true; else return false;
-	/*if (node->highEndpoint < 0) {
-		return false; //black node
-	} else if (node->highEndpoint > 0) {
-		return true; //red node
-	} else {
-		return NULL; //never happens since the skips can't be == 0
-	}*/
 }
 bool isBlack(intervalTree* node) { //returns false if the node is black, true if it's red
 	if (node->color == 'B') return true; else return false;

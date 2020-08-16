@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
+#include "red-black-tree-working.c"
 
 struct stringList { //single linked list for handling changes in the text
 		char* string;
@@ -21,50 +22,24 @@ struct collection {
 struct collection **table;
 
 
-char *sendNudes();
 
 int main() {
-	printf("size of struct = %d\n", (int) sizeof(struct collection));
-	/*
-	table = (struct collection**) malloc(2 * sizeof(struct collection));
 
-	struct collection *coll = (struct collection*) malloc(sizeof(struct collection));
-	coll->size = 1;
-	coll->deletedFlag = false;
-	coll->currentPosition = 0;
+	//initialization of quicklookups structure
+	quickLookupsHead = (struct quickLookupsHead*) malloc(sizeof(struct quickLookupsHead));
+	quickLookupsHead->capacity = 4; //just for testing a limited amount of intervals
+	quickLookupsHead->occupied = 0;
 
-	char** array = (char**) malloc(1 * sizeof(char*));
-
-	char* line = sendNudes();
-	array[0] = line;
-	coll->stack = array;
-
-	for (int i = 0; i < 1; i++) {
-		printf("%s\t", coll->stack[i]);
-	}
+	insertInterval(1, 5);
+	insertInterval(11, 13);
+	insertInterval(8, 9);
+	insertInterval(7, 7);
+	insertInterval(27, 29);
+	printInorderTrasversal(tree);
 	printf("\n");
 
-	table[0] = coll;
-
-	struct collection *coll2 = (struct collection*) malloc(sizeof(struct collection));
-	coll2->size = 4;
-	coll2->deletedFlag = false;
-	coll2->currentPosition = 0;
-
-	char** array2 = (char**) malloc(3 * sizeof(char*));
-	array2[0] = "fdz<reyyrte";
-	array2[1] = "gfxhxfgxjhtrxjg";
-	array2[2] = "sdfhxh";
-	array2[3] = "iorioeririorir";
-
-	coll2->stack = array2;
-
-	for (int i = 0; i < 4; i++) {
-		printf("%s\t", coll2->stack[i]);
-	}
-
-	table[1] = coll2;
-	*/
+	//lookups test 1 2 3
+	printf("lookup 1 = %d\n", quickLookup(1));
 
 	//this section tests for the dynamic decrease of an integer array of 20 integers, down to 10 integers
 	/*
@@ -87,9 +62,5 @@ int main() {
 	}
 */
     return 0;
-}
-
-char *sendNudes() {
-	return "lamadonna";
 }
 

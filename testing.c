@@ -4,42 +4,28 @@
 #include <stdbool.h>
 #include "red-black-tree-working.c"
 
-struct stringList { //single linked list for handling changes in the text
-		char* string;
-		bool deletedFlag;
-		struct stringList* next;
-};
-typedef struct stringList stringList;
-
-struct collection {
-	char** stack;
-	unsigned short currentPosition;
-	unsigned short size;
-	bool deletedFlag;
-	bool isAllocated;
-};
-
-struct collection **table;
-
-
 
 int main() {
 
 	//initialization of quicklookups structure
 	quickLookupsHead = (struct quickLookupsHead*) malloc(sizeof(struct quickLookupsHead));
-	quickLookupsHead->capacity = 4; //just for testing a limited amount of intervals
+	quickLookupsHead->capacity = 5; //just for testing a limited amount of intervals
 	quickLookupsHead->occupied = 0;
 
-	insertInterval(1, 5);
-	insertInterval(11, 13);
-	insertInterval(8, 9);
-	insertInterval(7, 7);
-	insertInterval(27, 29);
+	//int array[] = {436, 747, 33, 391, 561, 598, 864, 931, 176, 618, 462, 608, 65, 342, 716, 741, 712, 755, 788, 886, 213, 322};
+	//add 400 564
+
+	int array[] = {436, 747, 33, 391, 561, 598, 864, 931, 176, 618, 462, 608, 65, 342, 716, 741, 712, 755, 788, 886, 213, 322};
+	for (int i = 0; i < 22; i +=2) {
+		printf("added interval <%d,%d> \n", lookup(array[i]), lookup(array[i+1]));
+		insertInterval(lookup(array[i]), lookup(array[i+1]));
+		printInorderTrasversal(tree);
+		printf("\n");
+	}
 	printInorderTrasversal(tree);
 	printf("\n");
+	printf("lookup 400 = %d\n", lookup(400));
 
-	//lookups test 1 2 3
-	printf("lookup 1 = %d\n", quickLookup(1));
 
 	//this section tests for the dynamic decrease of an integer array of 20 integers, down to 10 integers
 	/*

@@ -132,8 +132,8 @@ int main() {
 
 	if (DEBUG_ACTIVE) {
 		//char fileName[] = "/home/simon/CS Project/Time_for_a_change_1_input.txt";
-		char fileName[] = "/home/simon/Downloads/test-cases-project/level4/test1000.txt"; //only for testing and debugging
-		//char fileName[] = "/home/simon/CS Project/TextEditor/inputTest.txt";
+		//char fileName[] = "/home/simon/Downloads/test-cases-project/level4/test100.txt"; //only for testing and debugging
+		char fileName[] = "/home/simon/CS Project/TextEditor/generatedTest.txt";
 		FILE *fp = fopen(fileName, "r"); //reads from a file, used for debugging
 		input(fp); //fp must be stdin when submitting the code on the platform
 	} else {
@@ -144,7 +144,8 @@ int main() {
 }
 
 int hash(int n) { //hash function with linear hashing
-	return quickLookup(n);
+	//return quickLookup(n); //TODO: doesn't work in certain cases
+	return lookup(n);
 }
 
 void change(int start, int end, char** text) { //changes the text
@@ -155,7 +156,7 @@ void change(int start, int end, char** text) { //changes the text
 	//increment size of hash table with a fast approximation, not every time it is needed
 	if (hash(end) > hashCapacity) {
 		hashTable = realloc(hashTable, (hashCapacity + range * 10) * sizeof(collection));
-		for (int j = hashCapacity; j <= hashCapacity + range; j++) {
+		for (int j = hashCapacity; j <= hashCapacity + range * 10; j++) {
 			hashTable[j] = NULL;
 		}
 		hashCapacity += range * 10;
@@ -194,7 +195,7 @@ void insertHashTable(int index, char *line) { //inserts single string in the has
 
 void delete(int start, int end) {
 	//TODO: make sure the interval is derived correctly
-	if (start == 0 && end == 0) {
+	if ((start == 0 && end == 0) || start > lastRow) {
 		//a delete call that doesn't do anything
 		delHistory *newTomb = (delHistory*) malloc(sizeof(struct deletedHistory));
 		newTomb->next = tombstones; //insert at the head of the linked list
@@ -204,24 +205,17 @@ void delete(int start, int end) {
 		tombstones = newTomb;
 		return;
 	}
-	if (end > lastRow) { //deals with useless delete calls on non-existent indexes in the hash table
-		end = lastRow; //but doesn't take into account the rows in the middle of the selected ones
-	}
-
 	if (start == 0) {
 		start = 1;
-	} else if (start > lastRow) {
-		//delete call doesn't do anything
-		delHistory *newTomb = (delHistory*) malloc(sizeof(struct deletedHistory));
-		newTomb->next = tombstones; //insert at the head of the linked list
-		newTomb->list = (int *) malloc(sizeof(int));
-		newTomb->list = 0;
-		newTomb->number = 0;
-		tombstones = newTomb;
-		return;
+	}
+	if (end > lastRow) { //deals with useless delete calls on non-existent indexes in the hash table
+		end = lastRow; //but doesn't take into account the rows in the middle of the selected ones
+		//lastRow = start - 1;
 	}
 
+
 	int range = end - start + 1;
+
 
 	delHistory *newTomb = (delHistory*) malloc(sizeof(struct deletedHistory));
 	newTomb->next = tombstones; //insert at the head of the linked list
@@ -231,6 +225,7 @@ void delete(int start, int end) {
 	int forward = start; //counter for finding the correct lines
 	int i = hash(start);
 
+	//TODO: make sure hash table was correctly allocated in the right index
 	while (hashTable[i] != NULL && count < range) { //fix here for the new mechanism
 		newTomb->list[count] = i; //memorization of deleted lines from the hash table
 		count++;
@@ -241,10 +236,12 @@ void delete(int start, int end) {
 	//could be added a realloc to shrink the array and reduce the number of elements to the ones strictly necessary
 	//but I don't do this since it may take some time to be executed numerous times
 	newTomb->number = count; //added line for keeping track of number of deleted elements
+	lastRow -= count;
+
 	tombstones = newTomb; //changes the list of tombstones by accessing at its address
 
 	if (DEBUG_ACTIVE) {
-		debugPrintTombstones(tombstones);
+		//debugPrintTombstones(tombstones);
 	}
 
 	int hashStart = tombstones->list[0], hashEnd = tombstones->list[count - 1];
@@ -300,17 +297,17 @@ void input(FILE *fp) { //fp is the file pointer passed from main
 			change(start, end, text);
 
 			if (DEBUG_ACTIVE) {
-				debugPrintFullTable(false);
+				//debugPrintFullTable(false);
 			}
 
 		} else if (action == 'p') {
 			//print lines, used only for the online compiler
 			if (DEBUG_ACTIVE) {
-				printf("print sequence from %d to %d started:\n", start, end);
+				//printf("print sequence from %d to %d started:\n", start, end);
 			}
 			stringList *str;
 			for (int i = start; i <= end; i++) {
-				if (hashTable[hash(i)] != NULL) {
+				if (hash(i) < hashCapacity && hashTable[hash(i)] != NULL) {
 					str = hashTable[hash(i)]->stack;
 					//goes forward until it finds the current string
 					//can be optimized by storing the current selected string in the collection struct table
@@ -331,7 +328,7 @@ void input(FILE *fp) { //fp is the file pointer passed from main
 
 			delete(start, end);
 			if (DEBUG_ACTIVE) {
-				debugPrintFullTable(false);
+				//debugPrintFullTable(false);
 			}
 
 		} else if (action == 'u' && end == 0) {
@@ -423,7 +420,7 @@ int lookup(int key) {
 			}
 			if (node->right == NULL) {
 				if (match == NULL) { //the rightmost node in the tree has a different index calculation
-					addIntervalForQuickLookups(node);
+					//addIntervalForQuickLookups(node);
 					//printf("node chosen is <%d,%d,%d>\n", node->a, node->b, node->skips);
 					return node->highEndpoint + key - node->skips;
 				}
@@ -456,7 +453,7 @@ int lookup(int key) {
 
 	if (match != NULL) { //should be match
 		//printf("node chosen is <%d,%d,%d>\n", match->a, match->b, match->skips);
-		addIntervalForQuickLookups(match);
+		//addIntervalForQuickLookups(match);
 		return match->lowEndpoint - 1 - match->skips + key; //is it correct though?
 	}
 	return 0; //must be never called
@@ -468,23 +465,12 @@ int quickLookup(int key) {
 	struct quickLook *prev = NULL; //prev must be automatically != NULL when counter > 1
 	int counter = 0; //counts the number of nodes which have been examined
 
-	while (current != NULL && counter < quickLookupsHead->capacity) {
+	while (current != NULL) {
 		//TODO: fsanitize flag says there is an error here that causes the segmentation fault in time for a change
 		comparison = inOrderPreviousNode(current->piece); //needed to check if the interval is the correct one
 		counter++;
 
-		if (inOrderNextNode(current->piece) == NULL) {
-			//this is the rightmost node
-			if (key > current->piece->skips) { //rightmost node is a valid interval
-				if (counter > 1 && prev != NULL) {
-					//moves current node to the head to make access faster
-					prev->next = current->next;
-					current->next = quickLookupsHead->head;
-					quickLookupsHead->head = current;
-				}
-				return current->piece->highEndpoint + key - current->piece->skips;
-			}
-		} else if (comparison == NULL) { //leftmost node found
+		 if (comparison == NULL) { //leftmost node found
 			if (current->piece->skips >= key) {
 				if (counter > 1 && prev != NULL) {
 					//moves current node to the head to make access faster
@@ -503,6 +489,17 @@ int quickLookup(int key) {
 				quickLookupsHead->head = current;
 			}
 			return current->piece->lowEndpoint - 1 - current->piece->skips + key;
+		} else if (inOrderNextNode(current->piece) == NULL) {
+			//this is the rightmost node
+			if (key > current->piece->skips) { //rightmost node is a valid interval
+				if (counter > 1 && prev != NULL) {
+					//moves current node to the head to make access faster
+					prev->next = current->next;
+					current->next = quickLookupsHead->head;
+					quickLookupsHead->head = current;
+				}
+				return current->piece->highEndpoint + key - current->piece->skips;
+			}
 		}
 		//continues the execution since a valid interval is not found
 		prev = current;
@@ -645,6 +642,7 @@ void redBlackTreeInsertionFixup(intervalTree* node) {
 // Utility function to insert a new node in RedBlack tree, after a delete call
 void insertInterval(int a, int b) {
 	// Allocates memory for new node (48 bytes)
+
 	intervalTree *newNode = (intervalTree*) malloc(sizeof(intervalTree));
 	newNode->left = NULL;
 	newNode->right = NULL;
@@ -809,7 +807,7 @@ void adjustParametersAfterInsertion(intervalTree* element) {
 			//copies the endpoints to make the lookup function faster, while wasting a bit of memory
 			current->highEndpoint = elementHigh;
 			current->lowEndpoint = elementLow;
-			current->skips = element->skips;
+			current->skips = prev->skips;
 		} else {
 			//calculates the new number of skips
 			current->skips = prev->skips + current->a - 1 - prev->highEndpoint;
@@ -817,6 +815,7 @@ void adjustParametersAfterInsertion(intervalTree* element) {
 			elementHigh = current->highEndpoint;
 			elementLow = current->lowEndpoint;
 		}
+
 		prev = current;
 		current = inOrderNextNode(current); //goes forward and updates the remaining nodes
 	}

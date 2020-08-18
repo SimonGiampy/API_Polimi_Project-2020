@@ -151,7 +151,7 @@ int lookup(int key) {
 			}
 			if (node->right == NULL) {
 				if (match == NULL) { //the rightmost node in the tree has a different index calculation
-					addIntervalForQuickLookups(node);
+					//addIntervalForQuickLookups(node);
 					//printf("node chosen is <%d,%d,%d>\n", node->a, node->b, node->skips);
 					return node->highEndpoint + key - node->skips;
 				}
@@ -184,7 +184,7 @@ int lookup(int key) {
 
 	if (match != NULL) { //should be match
 		//printf("node chosen is <%d,%d,%d>\n", match->a, match->b, match->skips);
-		addIntervalForQuickLookups(match);
+		//addIntervalForQuickLookups(match);
 		return match->lowEndpoint - 1 - match->skips + key; //is it correct though?
 	}
 	return 0; //must be never called
@@ -200,18 +200,7 @@ int quickLookup(int key) {
 		comparison = inOrderPreviousNode(current->piece); //needed to check if the interval is the correct one
 		counter++;
 
-		if (inOrderNextNode(current->piece) == NULL) {
-			//this is the rightmost node
-			if (key > current->piece->skips) { //rightmost node is a valid interval
-				if (counter > 1 && prev != NULL) {
-					//moves current node to the head to make access faster
-					prev->next = current->next;
-					current->next = quickLookupsHead->head;
-					quickLookupsHead->head = current;
-				}
-				return current->piece->highEndpoint + key - current->piece->skips;
-			}
-		} else if (comparison == NULL) { //leftmost node found
+		if (comparison == NULL) { //leftmost node found
 			if (current->piece->skips >= key) {
 				if (counter > 1 && prev != NULL) {
 					//moves current node to the head to make access faster
@@ -230,6 +219,17 @@ int quickLookup(int key) {
 				quickLookupsHead->head = current;
 			}
 			return current->piece->lowEndpoint - 1 - current->piece->skips + key;
+		} else if (inOrderNextNode(current->piece) == NULL) {
+			//this is the rightmost node
+			if (key > current->piece->skips) { //rightmost node is a valid interval
+				if (counter > 1 && prev != NULL) {
+					//moves current node to the head to make access faster
+					prev->next = current->next;
+					current->next = quickLookupsHead->head;
+					quickLookupsHead->head = current;
+				}
+				return current->piece->highEndpoint + key - current->piece->skips;
+			}
 		}
 		//continues the execution since a valid interval is not found
 		prev = current;
@@ -534,7 +534,7 @@ void adjustParametersAfterInsertion(intervalTree* element) {
 			//copies the endpoints to make the lookup function faster, while wasting a bit of memory
 			current->highEndpoint = elementHigh;
 			current->lowEndpoint = elementLow;
-			current->skips = element->skips;
+			current->skips = prev->skips;
 		} else {
 			//calculates the new number of skips
 			current->skips = prev->skips + current->a - 1 - prev->highEndpoint;

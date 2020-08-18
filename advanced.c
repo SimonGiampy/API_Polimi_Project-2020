@@ -71,10 +71,10 @@ int main() {
 	hashTable = malloc(hashCapacity * sizeof(collection));
 	lastRow = 0;
 
-	if (DEBUG_ACTIVE) {
+	if (!DEBUG_ACTIVE) {
 		//char fileName[] = "/home/simon/CS Project/Write_Only_1_input.txt";
 		//char fileName[] = "/home/simon/Downloads/test-cases-project/level4/test1000.txt"; //only for testing and debugging
-		char fileName[] = "/home/simon/CS Project/TextEditor/inputTest2.txt";
+		char fileName[] = "/home/simon/CS Project/TextEditor/inputTest6.txt";
 		FILE *fp = fopen(fileName, "r"); //reads from a file, used for debugging
 		input(fp); //fp must be stdin when submitting the code on the platform
 	} else {
@@ -96,7 +96,7 @@ void change(int start, int end, char** text) { //changes the text
 	//increment size of hash table with a fast approximation, not every time it is needed
 	if (hash(end) > hashCapacity) {
 		hashTable = realloc(hashTable, (hashCapacity + range * 10) * sizeof(collection));
-		for (int j = hashCapacity; j <= hashCapacity + range; j++) {
+		for (int j = hashCapacity; j <= hashCapacity + range * 10; j++) {
 			hashTable[j] = NULL;
 		}
 		hashCapacity += range * 10;

@@ -1,5 +1,4 @@
-//
-// Created by simon on 23/08/20.
+// Created by simon on 23/08/20
 // online compiler password: VMoY6CY1
 #include <stdio.h>
 #include <stdlib.h>
@@ -22,25 +21,38 @@ int lastPosition;
 
 //array of indexes that contains the index position of a certain string in the append only array
 int* currentPositions;
+//the first index 0 is used to calculate the number of lines inserted at the end (writeonly trick)
 int lastRow;
 
 //array of struct commands for keeping track of the history of changes
 struct command *history;
-short currentTime; //position in the array of the present state of the text, decreased by undo
-short pastActions; //number of changes and deletes done in total until a certain point in time, only increased
+int currentTime; //position in the array of the present state of the text, decreased by undo
+int pastActions; //number of changes and deletes done in total until a certain point in time, only increased
 
 //array of pointers to arrays of integer positions
+struct state {
+	int lastRow; //the real index of the last row in the array which contains a valid number
+	int lastPosition; //the index of the last string saved in the text state
+	int size; //dimension of the array of indexes (probably useless parameter)
+	int* indexes; //pointer to the base pointer of the array of indexes
+};
+typedef struct state states;
+states* textStates; //array of text states
 
 
 struct command* getCommand(char* input);
 void debugAppendText(void );
+void debugHistory(void );
+void debugCurrentPositions(void );
 void input(FILE* fp);
 void quit();
 
 void change(int start, int end, char **text);
 void printText(int from, int to);
 void delete(int start, int end);
-void deleteByMemoryMoving(int start, int end);
+void deleteByMovingMemory(int start, int end);
+void saveState(void );
+void debugTextStates();
 
 void input(FILE *fp) { //fp is the file pointer passed from main
 	if (fp == NULL) return;
@@ -51,7 +63,7 @@ void input(FILE *fp) { //fp is the file pointer passed from main
 		correctRead = fgets(buffer, 1024 + 1, fp);
 		assert(correctRead != NULL);
 
-		struct command* command = getCommand(buffer); //translates the line with the input (ind1,ind2)command in a struct containing the parameters
+		struct command* command = getCommand(buffer); //translates the line with the input (ind1,ind2)command in a struct
 		int start = command->start;
 		int end = command->end;
 		int num = end - start + 1;
@@ -69,7 +81,7 @@ void input(FILE *fp) { //fp is the file pointer passed from main
 			assert(correctRead != NULL);
 
 			change(start, end, text);
-
+			//saves in memory the command given in input
 			history[currentTime] = *command;
 			currentTime++;
 			pastActions++;
@@ -85,9 +97,9 @@ void input(FILE *fp) { //fp is the file pointer passed from main
 		} else if (action == 'd') {
 			if (!(start == 0 && end == 0)) {
 				delete(start, end);
-				//deleteByMemoryMoving(start, end);
+				//deleteByMovingMemory(start, end); //alternative method, test if it's faster
 			}
-
+			//saves in memory the command given in input
 			history[currentTime] = *command;
 			currentTime++;
 			pastActions++;
@@ -101,13 +113,13 @@ void input(FILE *fp) { //fp is the file pointer passed from main
 
 void printText(int from, int to) {
 	int points = 0;
-	if (to > lastRow) { //calculates how many empty lines to print
+	if (to > lastRow) { //calculates how many empty lines to print afterwards
 		points = to - lastRow;
 		to = lastRow;
 	}
 	if (from == 0) {
 		fputs(".\n", stdout);
-		from += 1;
+		from = 1;
 	}
 
 	int index = currentPositions[from]; //first index row
@@ -122,7 +134,8 @@ void printText(int from, int to) {
 }
 
 void change(int start, int end, char **text) {
-	//TODO: check the maximum number of rows inserted in write-only in order to avoid dynamic reallocation
+	//TODO: optimize memory usage for change calls that append strings to the end
+	//TODO: handle changes in the middle of the text after some writes at the end of the text
 	int j = lastPosition;
 	int from = start;
 	for (int i = 0; i < end - start + 1; i++, j++, from++) {
@@ -134,6 +147,7 @@ void change(int start, int end, char **text) {
 	if (lastRow < end) { //updates the last index representation
 		lastRow = end;
 	}
+	saveState();
 }
 
 //first method for deleting lines is based on copying the successive indexes of the next lines
@@ -151,31 +165,38 @@ void delete(int start, int end) {
 		start = 1;
 	}
 	int skip = end + 1;
-	lastRow -= end - start + 1; //decrease the number of rows present in the text
+	lastRow -= end - start + 1; //decrease the number of rows present in the text after a deletion
 
 	//O(n) time complexity, where n = number of lines present in the text
 	for (int i = start; i <= lastRow; i++, skip++) {
 		currentPositions[i] = currentPositions[skip];
 	}
+	//the rows after the last effective one contain numbers without meaning, so be careful not to access them
+	saveState();
 }
 
 //use memmove function to slide up the numbers and cover the deleted elements
-void deleteByMemoryMoving(int start, int end) {
+void deleteByMovingMemory(int start, int end) {
 	//this method is probably not faster than the other one
-	//add the clauses for handling invalid delete calls
+	//TODO: add the clauses for handling invalid delete calls
 	int* dest = currentPositions + start;
 	int* src = currentPositions + end + 1;
 	int number = lastRow - end;
 
 	memmove(dest, src, sizeof(int) * number);
-	//then set to -1 the indexes of the last rows since the number of rows decreases
-	//this section is technically unnecessary since the number of rows present in the text is always updated
-	/*
-	for (int i = lastRow - end + start; i <= lastRow; i++) {
-		currentPositions[i] = -1;
-	}
 	lastRow -= end - start + 1; //decrease the number of rows present in the text
-	 */
+}
+
+void saveState(void ) { //save current state in the struct state array
+	//allocate space for a copy of the current state
+	int size = lastRow + 1;
+
+	int* indexesArray = (int*) malloc(sizeof(int) * size);
+	memcpy(indexesArray, currentPositions, sizeof(int) * size); //copies the current state of the memory in the array
+
+	textStates[currentTime].lastRow = lastRow;
+	textStates[currentTime].lastPosition = lastPosition;
+	textStates[currentTime].indexes = indexesArray;
 }
 
 void debugAppendText() {
@@ -196,6 +217,19 @@ void debugHistory() {
 	printf("showing the history of changes from 0 to %d (current = %d) :\n", pastActions, currentTime);
 	for (int i = 0; i <= pastActions; i++) {
 		printf("%c : %d,%d\n", history[i].command, history[i].start, history[i].end);
+	}
+}
+
+void debugTextStates() {
+	printf("showing the text states using index numbers:\n");
+	int* array;
+	for (int i = 0; i <= pastActions; i++) { //for every saved state in the history
+		printf("lastRow = %d, lastPosition = %d : ", textStates[i].lastRow, textStates[i].lastPosition);
+		array = textStates[i].indexes;
+		for (int j = 1; j <= textStates[i].lastRow; j++) { //for every index saved in the array of indexes
+			printf("%d\t", array[j]);
+		}
+		printf("\n");
 	}
 }
 
@@ -228,7 +262,7 @@ void quit() { //input = 'q'
 
 int main() {
 	//initializations
-	int staticLinesCapacity = 1000000; //one million lines seems to be more than enough according to write-only task
+	int staticLinesCapacity = 100000000; //100 million lines seems to be more than enough according to write-only task
 	//static capacity is not augmented to avoid dynamic reallocation, in order to save time to allocate space memory
 	appendText = (char**) malloc(staticLinesCapacity * sizeof(char*));
 	lastPosition = 0;
@@ -237,10 +271,13 @@ int main() {
 	currentPositions[0] = 0;
 	lastRow = 0;
 
-	int staticHistoryCapacity = 10000; //10 thousand change and delete calls to be stored in the history of changes
+	int staticHistoryCapacity = 10000000; //10 million change and delete calls to be stored in the history of changes
 	//this static capacity should be big enough to contain every change made
 	history = (struct command*) malloc(staticHistoryCapacity * sizeof(struct command));
 	currentTime = 0; //current position in the history
+
+	textStates = (states*) malloc(staticHistoryCapacity * sizeof(states));
+	pastActions = 0;
 
 	clock_t start, end;
 	if (DEBUG_ACTIVE) {
@@ -263,8 +300,8 @@ int main() {
 		double timeTaken = (double) (end - start) / CLOCKS_PER_SEC;
 		printf("time taken is %.4f\n", timeTaken);
 		debugHistory();
+		debugTextStates();
 	}
-
 
 	return 0;
 }

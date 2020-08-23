@@ -22,8 +22,29 @@ faezhtfzhatrf
 <herdf<efg<e
 hdfzehtrfzdh
 .
+10,11c
+text inserted in the middle
+another line to test insertion in the middle
+.
+q
+
 15,16d
 0,2d
 10,16d
+4,8c
+ciao
+alla
+hello
+bye
+boi
+.
+10,15c
+ma
+guarda
+un
+po
+chi
+cè
+.
 0,15p
 q

@@ -8,7 +8,7 @@
 #include <stdbool.h>
 
 #define DEBUG_ACTIVE 0
-#define INPUT_FROM_USER 1
+#define INPUT_FROM_USER 0
 
 struct command { //every input is of the form (ind1,ind2)action
 	int start;
@@ -18,17 +18,18 @@ struct command { //every input is of the form (ind1,ind2)action
 
 //append-only array of strings, which contains every string inserted in input
 char** appendText;
-int lastPosition;
+int lastPosition; //the index of the last string inserted at the end of the array of strings
 
 //array of indexesArray that contains the index position of a certain string in the append only array
 int* currentPositions;
-//the first index 0 is used to calculate the number of lines inserted at the end (writeonly trick)
-int lastRow;
+int lastRow; //the index of the last effective row present in the text
 
 //array of struct commands for keeping track of the history of changes
 struct command *history;
 int currentTime; //position in the array of the present state of the text, decreased by undo
-int pastActions; //number of changes and deletes done in total until a certain point in time, only increased
+int pastActions; //number of changes and deletes done in total until a certain point in time
+int undoStack; //quantifies the number of undo commands that the program must execute
+//undoStack varies from 0 upwards and decreases when an undo is called
 
 //this flag identifies if the task being executed is write-only, so it optimizes memory usage
 bool WRITE_ONLY_SUBTASKS;
@@ -54,6 +55,9 @@ void change(int start, int end, char **text);
 void appendOnly(int start, int end, char **text);
 void printText(int from, int to);
 void delete(int start, int end);
+void fuckGoBack(int number);
+void timeMachine(int number);
+void newTimeline(void);
 void deleteByMovingMemory(int start, int end);
 void saveState(void );
 void saveStateAppend(void );
@@ -90,12 +94,15 @@ void input(FILE *fp) { //fp is the file pointer passed from main
 				printf("--------------------------------------change call (%d,%d):\n", start, end);
 			}
 			if (start == lastRow + 1 && WRITE_ONLY_SUBTASKS) {
+
 				appendOnly(start, end, text); //special case to handle write only test case
 			} else {
 				if (WRITE_ONLY_SUBTASKS) {
 					WRITE_ONLY_SUBTASKS = false;
 					restoreAppendedStates();
 				}
+
+				newTimeline();
 				change(start, end, text);
 			}
 			//saves in memory the command given in input
@@ -107,12 +114,19 @@ void input(FILE *fp) { //fp is the file pointer passed from main
 
 			if (DEBUG_ACTIVE) {
 				debugTextStates();
-				debugCurrentPositions();
 			}
 
 		} else if (action == 'p') { //outputs the text in the form asked by the project specification
 			if (DEBUG_ACTIVE) {
 				printf("--------------------------------------print call (%d,%d):\n", start, end);
+			}
+
+			int timeVariation = pastActions - undoStack;
+			if (DEBUG_ACTIVE) {
+				printf("current = %d, new time = %d\n", currentTime, timeVariation);
+			}
+			if (pastActions - timeVariation != 0) { //if nothing changed
+				timeMachine(timeVariation);
 			}
 
 			if (start == 0 && end == 0) {
@@ -131,6 +145,8 @@ void input(FILE *fp) { //fp is the file pointer passed from main
 			}
 
 			if (!(start == 0 && end == 0)) {
+
+				newTimeline();
 				delete(start, end);
 			}
 			//saves in memory the command given in input
@@ -142,10 +158,41 @@ void input(FILE *fp) { //fp is the file pointer passed from main
 		} else if (action == 'q') {
 			free(command);
 			break;
-		} else if (action == 'u' || action == 'r') {
+		} else if (action == 'u') {
+			if (DEBUG_ACTIVE) {
+				printf("-------------------------------------- undo call %d:\n", start);
+			}
 			if (WRITE_ONLY_SUBTASKS) {
 				WRITE_ONLY_SUBTASKS = false;
 				restoreAppendedStates();
+			}
+
+			//calculation of undo commands
+			if (pastActions < undoStack + start) {
+				undoStack = pastActions;
+			} else {
+				undoStack += start;
+			}
+
+			if (DEBUG_ACTIVE) {
+				printf("undo stack = %d\n", undoStack);
+			}
+		} else if (action == 'r') {
+			if (DEBUG_ACTIVE) {
+				printf("-------------------------------------- redo call %d:\n", start);
+			}
+			if (WRITE_ONLY_SUBTASKS) {
+				WRITE_ONLY_SUBTASKS = false;
+				restoreAppendedStates();
+			}
+			//calculation of redo commands
+			if (undoStack < start) {
+				undoStack = 0;
+			} else {
+				undoStack -= start;
+			}
+			if (DEBUG_ACTIVE) {
+				printf("undo stack = %d\n", undoStack);
 			}
 		}
 
@@ -176,7 +223,6 @@ void printText(int from, int to) {
 }
 
 void change(int start, int end, char **text) {
-	//TODO: handle changes in the middle of the text after some writes at the end of the text
 	int j = lastPosition;
 	int from = start;
 	for (int i = 0; i < end - start + 1; i++, j++, from++) {
@@ -250,10 +296,8 @@ void saveState(void ) { //save current state in the struct state array
 	textStates[currentTime].indexesArray = indexes;
 }
 
-//only for handling write only
+//only for handling write only append text queries
 void saveStateAppend(void) {
-	//TODO: optimize memory usage for change calls that append strings to the end
-
 	textStates[currentTime].rows = 0;
 	textStates[currentTime].lastEntry = lastPosition;
 	textStates[currentTime].indexesArray = NULL;
@@ -274,6 +318,39 @@ void restoreAppendedStates(void ) {
 	}
 }
 
+
+//redoes commands and sets the new state
+void timeMachine(int number) {
+	//number defines the new current time so it gets updated (can go forward or backwards)
+	if (currentTime != number) {
+		currentTime = number;
+		lastPosition = textStates[currentTime].lastEntry;
+		lastRow = textStates[currentTime].rows;
+		int size = textStates[currentTime].rows + 1;
+		memcpy(currentPositions, textStates[currentTime].indexesArray, sizeof(int) * size);
+	}
+}
+
+void newTimeline(void) {
+	if (currentTime < pastActions) {
+		lastPosition = textStates[currentTime].lastEntry;
+		lastRow = textStates[currentTime].rows;
+
+		for (int i = currentTime + 1; i <= pastActions; i++) {
+			free(textStates[i].indexesArray);
+			textStates[i].lastEntry = 0;
+			textStates[i].rows = 0;
+			//reset history as well ?
+		}
+		currentTime += 1;
+		pastActions = currentTime;
+
+		if (DEBUG_ACTIVE) {
+			debugTextStates();
+		}
+	} //else the timeline is already reset
+}
+
 void debugAppendText() {
 	printf("showing the strings in memory from 0 to %d:\n", lastPosition);
 	for (int i = 0; i < lastPosition; i++) {
@@ -290,7 +367,7 @@ void debugCurrentPositions() {
 
 void debugHistory() {
 	printf("showing the history of changes from 0 to %d (current = %d) :\n", pastActions, currentTime);
-	for (int i = 0; i < pastActions; i++) {
+	for (int i = 1; i <= pastActions; i++) {
 		printf("%c : %d,%d\n", history[i].command, history[i].start, history[i].end);
 	}
 }
@@ -298,7 +375,7 @@ void debugHistory() {
 void debugTextStates() {
 	printf("showing the text states using index numbers:\n");
 	int* array;
-	for (int i = 0; i < pastActions; i++) { //for every saved state in the history
+	for (int i = 1; i <= pastActions; i++) { //for every saved state in the history
 		printf("rows = %2d, \tlastEntry = %2d: \t", textStates[i].rows, textStates[i].lastEntry);
 		array = textStates[i].indexesArray;
 		for (int j = 1; j <= textStates[i].rows; j++) { //for every index saved in the array of indexesArray
@@ -335,7 +412,7 @@ struct command* getCommand(char* input) { //translates the input string in a str
 
 
 int main() {
-	//initializations
+	//initializations of static and dynamic arrays
 	int staticLinesCapacity = 100000000; //100 million lines seems to be more than enough according to write-only task
 	//static capacity is not augmented to avoid dynamic reallocation, in order to save time to allocate space memory
 	appendText = (char**) malloc(staticLinesCapacity * sizeof(char*));
@@ -348,10 +425,15 @@ int main() {
 	int staticHistoryCapacity = 10000000; //10 million change and delete calls to be stored in the history of changes
 	//this static capacity should be big enough to contain every change made
 	history = (struct command*) malloc(staticHistoryCapacity * sizeof(struct command));
-	currentTime = 0; //current position in the history
+	currentTime = 1; //current position in the history
 
 	textStates = (states*) malloc(staticHistoryCapacity * sizeof(states));
-	pastActions = 0;
+	textStates[0].indexesArray = currentPositions; //empty text to start with
+	textStates[0].rows = 0;
+	textStates[0].lastEntry = 0;
+
+	pastActions = 0; //number of actions in the current timeline
+	undoStack = 0; //number of undos to apply, only positive values accepted
 
 	WRITE_ONLY_SUBTASKS = true; //the first call must be from 1 onwards
 
@@ -363,9 +445,9 @@ int main() {
 	if (INPUT_FROM_USER == 1) {
 		input(stdin);
 	} else {
-		//char fileName[] = "/home/simon/CS Project/Write_Only_2_input.txt";
+		//char fileName[] = "/home/simon/CS Project/Rolling_Back_2_input.txt";
 		//char fileName[] = "/home/simon/Downloads/test-cases-project/level4/test1000.txt"; //only for testing and debugging
-		char fileName[] = "/home/simon/CS Project/TextEditor/inputTest.txt";
+		char fileName[] = "/home/simon/CS Project/TextEditor/generatedTest.txt";
 		FILE *fp = fopen(fileName, "r"); //reads from a file, used for debugging
 		input(fp); //fp must be stdin when submitting the code on the platform
 
@@ -375,7 +457,7 @@ int main() {
 		end = clock();
 		double timeTaken = (double) (end - start) / CLOCKS_PER_SEC;
 		printf("time taken is %.4f\n", timeTaken);
-		debugHistory();
+		//debugHistory();
 		debugTextStates();
 	}
 

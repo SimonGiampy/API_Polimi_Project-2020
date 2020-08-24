@@ -26,8 +26,17 @@ hdfzehtrfzdh
 text inserted in the middle
 another line to test insertion in the middle
 .
-q
-
+1,4c
+jsdgreatz
+srthrfgrxs
+fgxhtfghrfxsj
+htx
+.
+12,14c
+sdfergte
+gtsrhrxfh
+fstxghtrf
+.
 15,16d
 0,2d
 10,16d

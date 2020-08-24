@@ -5,9 +5,10 @@
 #include <assert.h>
 #include <string.h>
 #include <time.h>
+#include <stdbool.h>
 
-#define DEBUG_ACTIVE 1
-#define INPUT_FROM_USER 0
+#define DEBUG_ACTIVE 0
+#define INPUT_FROM_USER 1
 
 struct command { //every input is of the form (ind1,ind2)action
 	int start;
@@ -19,7 +20,7 @@ struct command { //every input is of the form (ind1,ind2)action
 char** appendText;
 int lastPosition;
 
-//array of indexes that contains the index position of a certain string in the append only array
+//array of indexesArray that contains the index position of a certain string in the append only array
 int* currentPositions;
 //the first index 0 is used to calculate the number of lines inserted at the end (writeonly trick)
 int lastRow;
@@ -29,12 +30,15 @@ struct command *history;
 int currentTime; //position in the array of the present state of the text, decreased by undo
 int pastActions; //number of changes and deletes done in total until a certain point in time, only increased
 
+//this flag identifies if the task being executed is write-only, so it optimizes memory usage
+bool WRITE_ONLY_SUBTASKS;
+
 //array of pointers to arrays of integer positions
 struct state {
-	int lastRow; //the real index of the last row in the array which contains a valid number
-	int lastPosition; //the index of the last string saved in the text state
-	int size; //dimension of the array of indexes (probably useless parameter)
-	int* indexes; //pointer to the base pointer of the array of indexes
+	int rows; //the real index of the last row in the array which contains a valid number
+	//rows also indicates how many lines are memorized in a certain state
+	int lastEntry; //the index of the last string saved in the text state
+	int* indexesArray; //pointer to the base pointer of the array of indexesArray
 };
 typedef struct state states;
 states* textStates; //array of text states
@@ -45,13 +49,15 @@ void debugAppendText(void );
 void debugHistory(void );
 void debugCurrentPositions(void );
 void input(FILE* fp);
-void quit();
 
 void change(int start, int end, char **text);
+void appendOnly(int start, int end, char **text);
 void printText(int from, int to);
 void delete(int start, int end);
 void deleteByMovingMemory(int start, int end);
 void saveState(void );
+void saveStateAppend(void );
+void restoreAppendedStates(void );
 void debugTextStates();
 
 void input(FILE *fp) { //fp is the file pointer passed from main
@@ -80,7 +86,18 @@ void input(FILE *fp) { //fp is the file pointer passed from main
 			correctRead = fgets(buffer, 3, fp); //reads the terminal sequence of the input text ".\n\0" -> 3 chars
 			assert(correctRead != NULL);
 
-			change(start, end, text);
+			if (DEBUG_ACTIVE) {
+				printf("--------------------------------------change call (%d,%d):\n", start, end);
+			}
+			if (start == lastRow + 1 && WRITE_ONLY_SUBTASKS) {
+				appendOnly(start, end, text); //special case to handle write only test case
+			} else {
+				if (WRITE_ONLY_SUBTASKS) {
+					WRITE_ONLY_SUBTASKS = false;
+					restoreAppendedStates();
+				}
+				change(start, end, text);
+			}
 			//saves in memory the command given in input
 			history[currentTime] = *command;
 			currentTime++;
@@ -88,16 +105,33 @@ void input(FILE *fp) { //fp is the file pointer passed from main
 
 			free(command);
 
+			if (DEBUG_ACTIVE) {
+				debugTextStates();
+				debugCurrentPositions();
+			}
+
 		} else if (action == 'p') { //outputs the text in the form asked by the project specification
+			if (DEBUG_ACTIVE) {
+				printf("--------------------------------------print call (%d,%d):\n", start, end);
+			}
+
 			if (start == 0 && end == 0) {
 				fputs(".\n", stdout);
 			} else {
 				printText(start, end);
 			}
 		} else if (action == 'd') {
+			if (DEBUG_ACTIVE) {
+				printf("--------------------------------------delete call (%d,%d):\n", start, end);
+			}
+
+			if (WRITE_ONLY_SUBTASKS) {
+				WRITE_ONLY_SUBTASKS = false;
+				restoreAppendedStates();
+			}
+
 			if (!(start == 0 && end == 0)) {
 				delete(start, end);
-				//deleteByMovingMemory(start, end); //alternative method, test if it's faster
 			}
 			//saves in memory the command given in input
 			history[currentTime] = *command;
@@ -105,6 +139,14 @@ void input(FILE *fp) { //fp is the file pointer passed from main
 			pastActions++;
 
 			free(command);
+		} else if (action == 'q') {
+			free(command);
+			break;
+		} else if (action == 'u' || action == 'r') {
+			if (WRITE_ONLY_SUBTASKS) {
+				WRITE_ONLY_SUBTASKS = false;
+				restoreAppendedStates();
+			}
 		}
 
 	}
@@ -134,13 +176,12 @@ void printText(int from, int to) {
 }
 
 void change(int start, int end, char **text) {
-	//TODO: optimize memory usage for change calls that append strings to the end
 	//TODO: handle changes in the middle of the text after some writes at the end of the text
 	int j = lastPosition;
 	int from = start;
 	for (int i = 0; i < end - start + 1; i++, j++, from++) {
 		appendText[j] = text[i]; //appends the new text given in input
-		currentPositions[from] = j; //writes the correct index in the array of current indexes
+		currentPositions[from] = j; //writes the correct index in the array of current indexesArray
 	}
 	lastPosition = j; //updates last entry index of appendText array
 
@@ -150,9 +191,20 @@ void change(int start, int end, char **text) {
 	saveState();
 }
 
-//first method for deleting lines is based on copying the successive indexes of the next lines
+void appendOnly(int start, int end, char** text) {
+	int j = lastPosition;
+	int from = start;
+	for (int i = 0; i < end - start + 1; i++, j++, from++) {
+		appendText[j] = text[i]; //appends the new text given in input
+		currentPositions[from] = j;
+	}
+	lastPosition = j; //updates last entry index of appendText array
+	lastRow = end; //unnecessary line
+	saveStateAppend();
+}
+
+//first method for deleting lines is based on copying the successive indexesArray of the next lines
 void delete(int start, int end) {
-	//TODO: handle invalid delete calls
 	if (start > lastRow) {
 		//add to the history a delete call that does nothing
 		return;
@@ -177,7 +229,7 @@ void delete(int start, int end) {
 
 //use memmove function to slide up the numbers and cover the deleted elements
 void deleteByMovingMemory(int start, int end) {
-	//this method is probably not faster than the other one
+	//TODO: huge memory leak by using this function
 	//TODO: add the clauses for handling invalid delete calls
 	int* dest = currentPositions + start;
 	int* src = currentPositions + end + 1;
@@ -190,13 +242,36 @@ void deleteByMovingMemory(int start, int end) {
 void saveState(void ) { //save current state in the struct state array
 	//allocate space for a copy of the current state
 	int size = lastRow + 1;
+	int* indexes = (int*) malloc(sizeof(int) * size);
+	memcpy(indexes, currentPositions, sizeof(int) * size); //copies the current state of the memory in the array
 
-	int* indexesArray = (int*) malloc(sizeof(int) * size);
-	memcpy(indexesArray, currentPositions, sizeof(int) * size); //copies the current state of the memory in the array
+	textStates[currentTime].rows = lastRow;
+	textStates[currentTime].lastEntry = lastPosition;
+	textStates[currentTime].indexesArray = indexes;
+}
 
-	textStates[currentTime].lastRow = lastRow;
-	textStates[currentTime].lastPosition = lastPosition;
-	textStates[currentTime].indexes = indexesArray;
+//only for handling write only
+void saveStateAppend(void) {
+	//TODO: optimize memory usage for change calls that append strings to the end
+
+	textStates[currentTime].rows = 0;
+	textStates[currentTime].lastEntry = lastPosition;
+	textStates[currentTime].indexesArray = NULL;
+}
+
+void restoreAppendedStates(void ) {
+	if (DEBUG_ACTIVE) {
+		printf("restoring %d states: \n", currentTime);
+	}
+	int* indexes[currentTime];
+	int last;
+	for (int i = 0; i < currentTime; i++) {
+		last = textStates[i].lastEntry;
+		textStates[i].rows = last;
+		indexes[i] = (int*) malloc(sizeof(int) * (last + 1));
+		memcpy(indexes[i], currentPositions, sizeof(int) * (last + 1));
+		textStates[i].indexesArray = indexes[i];
+	}
 }
 
 void debugAppendText() {
@@ -207,7 +282,7 @@ void debugAppendText() {
 }
 
 void debugCurrentPositions() {
-	printf("showing the indexes related to the strings from 0 to %d:\n", lastRow);
+	printf("showing the indexesArray related to the strings from 0 to %d:\n", lastRow);
 	for (int i = 1; i <= lastRow; i++) {
 		printf("%d : %d\n", i, currentPositions[i]);
 	}
@@ -215,7 +290,7 @@ void debugCurrentPositions() {
 
 void debugHistory() {
 	printf("showing the history of changes from 0 to %d (current = %d) :\n", pastActions, currentTime);
-	for (int i = 0; i <= pastActions; i++) {
+	for (int i = 0; i < pastActions; i++) {
 		printf("%c : %d,%d\n", history[i].command, history[i].start, history[i].end);
 	}
 }
@@ -223,10 +298,10 @@ void debugHistory() {
 void debugTextStates() {
 	printf("showing the text states using index numbers:\n");
 	int* array;
-	for (int i = 0; i <= pastActions; i++) { //for every saved state in the history
-		printf("lastRow = %d, lastPosition = %d : ", textStates[i].lastRow, textStates[i].lastPosition);
-		array = textStates[i].indexes;
-		for (int j = 1; j <= textStates[i].lastRow; j++) { //for every index saved in the array of indexes
+	for (int i = 0; i < pastActions; i++) { //for every saved state in the history
+		printf("rows = %2d, \tlastEntry = %2d: \t", textStates[i].rows, textStates[i].lastEntry);
+		array = textStates[i].indexesArray;
+		for (int j = 1; j <= textStates[i].rows; j++) { //for every index saved in the array of indexesArray
 			printf("%d\t", array[j]);
 		}
 		printf("\n");
@@ -234,11 +309,15 @@ void debugTextStates() {
 }
 
 struct command* getCommand(char* input) { //translates the input string in a struct containing start, end and the action
+	struct command *commando = (struct command*) malloc(sizeof(struct command));
+
 	if (strcmp(input, "q\n") == 0 || strcmp(input, "q") == 0) { //equal strings
-		quit();
+		commando->command = 'q';
+		commando->start = 0;
+		commando->end = 0;
+		return commando;
 	}
 
-	struct command *commando = (struct command*) malloc(sizeof(struct command));
 	//new better error-free version
 	char* endPtr;
 	int start = (int) strtol(input, &endPtr, 10);
@@ -254,11 +333,6 @@ struct command* getCommand(char* input) { //translates the input string in a str
 	return commando; //returns the struct containing the information of the command in input
 }
 
-void quit() { //input = 'q'
-	if (INPUT_FROM_USER == 1) {
-		exit(0);
-	}
-}
 
 int main() {
 	//initializations
@@ -278,6 +352,8 @@ int main() {
 
 	textStates = (states*) malloc(staticHistoryCapacity * sizeof(states));
 	pastActions = 0;
+
+	WRITE_ONLY_SUBTASKS = true; //the first call must be from 1 onwards
 
 	clock_t start, end;
 	if (DEBUG_ACTIVE) {

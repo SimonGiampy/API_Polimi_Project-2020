@@ -8,7 +8,7 @@
 #include <stdbool.h>
 
 #define DEBUG_ACTIVE 0
-#define INPUT_FROM_USER 0
+#define INPUT_FROM_USER 1
 
 struct command { //every input is of the form (ind1,ind2)action
 	int start;
@@ -55,7 +55,6 @@ void change(int start, int end, char **text);
 void appendOnly(int start, int end, char **text);
 void printText(int from, int to);
 void delete(int start, int end);
-void fuckGoBack(int number);
 void timeMachine(int number);
 void newTimeline(void);
 void deleteByMovingMemory(int start, int end);
@@ -78,7 +77,8 @@ void input(FILE *fp) { //fp is the file pointer passed from main
 		int end = command->end;
 		int num = end - start + 1;
 		char action = command->command;
-
+		//TODO: check correctness of the update mechanism for the variables currentTime and pastActions
+		//TODO: the error is situated in the increase / decrease of the undo stack in relation to current time
 		if (action == 'c') {
 			char *text[num]; //allocates an array of num strings, one for each line
 			for (int i = 0; i < num; i++) {
@@ -93,9 +93,17 @@ void input(FILE *fp) { //fp is the file pointer passed from main
 			if (DEBUG_ACTIVE) {
 				printf("--------------------------------------change call (%d,%d):\n", start, end);
 			}
+			int timeVariation = pastActions - undoStack;
+			if (DEBUG_ACTIVE) {
+				printf("time travel: current = %d, new time = %d, past = %d\n", currentTime, timeVariation, pastActions);
+			}
+			if (timeVariation != currentTime) { //if something changed
+				timeMachine(timeVariation);
+			}
+			currentTime++;
 			if (start == lastRow + 1 && WRITE_ONLY_SUBTASKS) {
-
 				appendOnly(start, end, text); //special case to handle write only test case
+				pastActions++;
 			} else {
 				if (WRITE_ONLY_SUBTASKS) {
 					WRITE_ONLY_SUBTASKS = false;
@@ -103,12 +111,13 @@ void input(FILE *fp) { //fp is the file pointer passed from main
 				}
 
 				newTimeline();
+				pastActions++;
 				change(start, end, text);
 			}
 			//saves in memory the command given in input
 			history[currentTime] = *command;
-			currentTime++;
-			pastActions++;
+			//currentTime++;
+			//pastActions++;
 
 			free(command);
 
@@ -123,9 +132,9 @@ void input(FILE *fp) { //fp is the file pointer passed from main
 
 			int timeVariation = pastActions - undoStack;
 			if (DEBUG_ACTIVE) {
-				printf("current = %d, new time = %d\n", currentTime, timeVariation);
+				printf("time travel: current = %d, new time = %d, past = %d\n", currentTime, timeVariation, pastActions);
 			}
-			if (pastActions - timeVariation != 0) { //if nothing changed
+			if (timeVariation != currentTime) { //if something changed
 				timeMachine(timeVariation);
 			}
 
@@ -143,16 +152,28 @@ void input(FILE *fp) { //fp is the file pointer passed from main
 				WRITE_ONLY_SUBTASKS = false;
 				restoreAppendedStates();
 			}
-
+			int timeVariation = pastActions - undoStack;
+			if (DEBUG_ACTIVE) {
+				printf("time travel: current = %d, new time = %d, past = %d\n", currentTime, timeVariation, pastActions);
+			}
+			if (timeVariation != currentTime) { //if something changed
+				timeMachine(timeVariation);
+				//TODO: handle deletions of empty text from current time = 0 and 1
+			}
+			currentTime++;
+			newTimeline();
+			pastActions++;
 			if (!(start == 0 && end == 0)) {
-
-				newTimeline();
 				delete(start, end);
+			}
+			if (DEBUG_ACTIVE) {
+				printf("after delete \n");
+				debugTextStates();
 			}
 			//saves in memory the command given in input
 			history[currentTime] = *command;
-			currentTime++;
-			pastActions++;
+			//currentTime++;
+			//pastActions++;
 
 			free(command);
 		} else if (action == 'q') {
@@ -176,6 +197,7 @@ void input(FILE *fp) { //fp is the file pointer passed from main
 
 			if (DEBUG_ACTIVE) {
 				printf("undo stack = %d\n", undoStack);
+				debugTextStates();
 			}
 		} else if (action == 'r') {
 			if (DEBUG_ACTIVE) {
@@ -193,6 +215,7 @@ void input(FILE *fp) { //fp is the file pointer passed from main
 			}
 			if (DEBUG_ACTIVE) {
 				printf("undo stack = %d\n", undoStack);
+				debugTextStates();
 			}
 		}
 
@@ -253,6 +276,7 @@ void appendOnly(int start, int end, char** text) {
 void delete(int start, int end) {
 	if (start > lastRow) {
 		//add to the history a delete call that does nothing
+		saveState();
 		return;
 	}
 
@@ -309,12 +333,12 @@ void restoreAppendedStates(void ) {
 	}
 	int* indexes[currentTime];
 	int last;
-	for (int i = 0; i < currentTime; i++) {
+	for (int i = 1; i <= currentTime; i++) {
 		last = textStates[i].lastEntry;
 		textStates[i].rows = last;
-		indexes[i] = (int*) malloc(sizeof(int) * (last + 1));
-		memcpy(indexes[i], currentPositions, sizeof(int) * (last + 1));
-		textStates[i].indexesArray = indexes[i];
+		indexes[i-1] = (int*) malloc(sizeof(int) * (last + 1));
+		memcpy(indexes[i-1], currentPositions, sizeof(int) * (last + 1));
+		textStates[i].indexesArray = indexes[i-1];
 	}
 }
 
@@ -322,31 +346,37 @@ void restoreAppendedStates(void ) {
 //redoes commands and sets the new state
 void timeMachine(int number) {
 	//number defines the new current time so it gets updated (can go forward or backwards)
-	if (currentTime != number) {
-		currentTime = number;
-		lastPosition = textStates[currentTime].lastEntry;
-		lastRow = textStates[currentTime].rows;
-		int size = textStates[currentTime].rows + 1;
-		memcpy(currentPositions, textStates[currentTime].indexesArray, sizeof(int) * size);
-	}
+	//if (currentTime != number) {
+	currentTime = number;
+	lastPosition = textStates[currentTime].lastEntry;
+	lastRow = textStates[currentTime].rows;
+
+	int size = textStates[currentTime].rows + 1;
+	memcpy(currentPositions, textStates[currentTime].indexesArray, sizeof(int) * size);
+
+	//}
 }
 
 void newTimeline(void) {
-	if (currentTime < pastActions) {
-		lastPosition = textStates[currentTime].lastEntry;
-		lastRow = textStates[currentTime].rows;
+	if (currentTime < pastActions + 1) {
+		//lastPosition = textStates[currentTime].lastEntry;
+		//lastRow = textStates[currentTime].rows;
 
-		for (int i = currentTime + 1; i <= pastActions; i++) {
+		for (int i = currentTime; i <= pastActions; i++) {
 			free(textStates[i].indexesArray);
 			textStates[i].lastEntry = 0;
 			textStates[i].rows = 0;
 			//reset history as well ?
 		}
-		currentTime += 1;
-		pastActions = currentTime;
+		//currentTime += 1;
+
+		pastActions = currentTime - 1;
+
+		undoStack = 0;
 
 		if (DEBUG_ACTIVE) {
 			debugTextStates();
+			printf("timeline changed (current = %d, past = %d)\n", currentTime, pastActions);
 		}
 	} //else the timeline is already reset
 }
@@ -376,7 +406,7 @@ void debugTextStates() {
 	printf("showing the text states using index numbers:\n");
 	int* array;
 	for (int i = 1; i <= pastActions; i++) { //for every saved state in the history
-		printf("rows = %2d, \tlastEntry = %2d: \t", textStates[i].rows, textStates[i].lastEntry);
+		printf("time = %d, \trows = %2d, \tlastEntry = %2d: \t", i, textStates[i].rows, textStates[i].lastEntry);
 		array = textStates[i].indexesArray;
 		for (int j = 1; j <= textStates[i].rows; j++) { //for every index saved in the array of indexesArray
 			printf("%d\t", array[j]);
@@ -425,7 +455,7 @@ int main() {
 	int staticHistoryCapacity = 10000000; //10 million change and delete calls to be stored in the history of changes
 	//this static capacity should be big enough to contain every change made
 	history = (struct command*) malloc(staticHistoryCapacity * sizeof(struct command));
-	currentTime = 1; //current position in the history
+	currentTime = 0; //current position in the history
 
 	textStates = (states*) malloc(staticHistoryCapacity * sizeof(states));
 	textStates[0].indexesArray = currentPositions; //empty text to start with
@@ -448,6 +478,7 @@ int main() {
 		//char fileName[] = "/home/simon/CS Project/Rolling_Back_2_input.txt";
 		//char fileName[] = "/home/simon/Downloads/test-cases-project/level4/test1000.txt"; //only for testing and debugging
 		char fileName[] = "/home/simon/CS Project/TextEditor/generatedTest.txt";
+		//char fileName[] = "/home/simon/CS Project/TextEditor/inputTest6.txt";
 		FILE *fp = fopen(fileName, "r"); //reads from a file, used for debugging
 		input(fp); //fp must be stdin when submitting the code on the platform
 
